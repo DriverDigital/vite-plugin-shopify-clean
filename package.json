@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Vite plugin for correctly cleaning up an assets folder",
   "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "keywords": [
     "vite",
     "shopify",
