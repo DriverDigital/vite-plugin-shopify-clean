@@ -1,23 +1,29 @@
-import { existsSync, promises as fs, readFileSync } from 'fs'
-import { unlink } from 'fs/promises'
+import { existsSync, promises as fs } from 'fs'
 import path from 'path'
 
 import { Manifest, Plugin } from 'vite'
 
 import { resolveOptions, VitePluginShopifyCleanOptions } from './options'
 
-let buildStartFirstRun = true
-let closeBundleFirstRun = true
-
-// eslint-disable-next-line import/no-default-export
+ 
 export default function shopifyClean (options: VitePluginShopifyCleanOptions = {}): Plugin {
   const resolvedOptions = resolveOptions(options)
 
+  // First-run flags scoped per plugin instance
+  let buildStartFirstRun = true
+  let writeBundleFirstRun = true
+
+  const getAssetsDir = (): string => {
+    const rootPath = path.resolve(resolvedOptions.themeRoot)
+    return path.resolve(rootPath, './assets')
+  }
+
+  const escapeRegExp = (input: string): string => input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
   return {
     name: 'vite-plugin-shopify-clean',
-    buildStart: async () => {
-      const rootPath = path.resolve(resolvedOptions.themeRoot)
-      const assetsDir = path.resolve(rootPath, './assets')
+    buildStart: async function () {
+      const assetsDir = getAssetsDir()
 
       if (!existsSync(assetsDir)) {
         console.warn(`WARNING: No assets folder located at ${assetsDir}. No clean attempted.`)
@@ -33,37 +39,37 @@ export default function shopifyClean (options: VitePluginShopifyCleanOptions = {
         return
       }
 
-      const manifest = JSON.parse(readFileSync(manifestFile, 'utf-8')) as Manifest
+      const manifest = JSON.parse(await fs.readFile(manifestFile, 'utf-8')) as Manifest
       const filesInManifest = getFilesInManifest(manifest)
 
-      if (process.env.VITE_WATCH && !buildStartFirstRun) {
+      if (this.meta.watchMode && !buildStartFirstRun) {
         return
       }
 
       buildStartFirstRun = false
 
       await Promise.all(filesInManifest.map(async file => {
-        const location = path.join(assetsDir, file)
+        const base = path.basename(file)
+        const location = path.join(assetsDir, base)
 
         if (existsSync(location)) {
-          return unlink(location)
+          return fs.unlink(location)
         }
 
         return Promise.resolve()
       }))
     },
 
-    writeBundle: async (_, bundle) => {
+    writeBundle: async function (_, bundle) {
       if (!(resolvedOptions.manifestFileName in bundle)) return
-      if (!process.env.VITE_WATCH) return
-      if (closeBundleFirstRun) {
-        closeBundleFirstRun = false
+      if (!this.meta.watchMode) return
+      if (writeBundleFirstRun) {
+        writeBundleFirstRun = false
 
         return
       }
 
-      const rootPath = path.resolve(resolvedOptions.themeRoot)
-      const assetsDir = path.resolve(rootPath, './assets')
+      const assetsDir = getAssetsDir()
 
       if (!existsSync(assetsDir)) {
         console.warn(`WARNING: No assets folder located at ${assetsDir}. No clean attempted.`)
@@ -76,19 +82,21 @@ export default function shopifyClean (options: VitePluginShopifyCleanOptions = {
 
       const manifest = JSON.parse(manifestAsset.source.toString()) as Manifest
       const filesInManifest = getFilesInManifest(manifest)
+      const filesInManifestBase = filesInManifest.map(f => path.basename(f))
       const filesInAssets = await fs.readdir(assetsDir)
       const filesToDelete = [...new Set(filesInManifest.map(file => {
-        const fileStartsWith = file
+        const base = path.basename(file)
+        const fileStartsWith = base
           .split('-')
-          .slice(0, file.split('-').length - 1)
+          .slice(0, base.split('-').length - 1)
           .join('-')
-        const fileExtension = file.split('.')[file.split('.').length - 1]
-        const toLookFor = new RegExp(`${fileStartsWith}-(.*).${fileExtension}`, 'i')
+        const fileExtension = base.split('.')[base.split('.').length - 1]
+        const toLookFor = new RegExp(`^${escapeRegExp(fileStartsWith)}-[^.]+\\.${escapeRegExp(fileExtension)}$`, 'i')
 
         return filesInAssets
           .filter(assetFile => {
             const matches = assetFile.match(toLookFor)
-            const fileIsInManifest = filesInManifest.includes(assetFile)
+            const fileIsInManifest = filesInManifestBase.includes(assetFile)
 
             return matches && !fileIsInManifest
           })
@@ -98,7 +106,7 @@ export default function shopifyClean (options: VitePluginShopifyCleanOptions = {
         const location = path.join(assetsDir, file)
 
         if (existsSync(location)) {
-          return unlink(location)
+          return fs.unlink(location)
         }
 
         return Promise.resolve()
@@ -107,7 +115,7 @@ export default function shopifyClean (options: VitePluginShopifyCleanOptions = {
   }
 }
 
-function getFilesInManifest (manifest: Manifest) {
+function getFilesInManifest (manifest: Manifest): string[] {
   const filesListedInImports = new Set(
     Object.values(manifest)
       .map(block => {
@@ -125,7 +133,7 @@ function getFilesInManifest (manifest: Manifest) {
       const file = block.file
 
       // We're experiencing a manifest which is listing a file that isn't output so we'll check the imports to make sure all files are actually used. This typically only seems to be for imports which start with an _
-      if (key.startsWith('_')) {
+      if (path.posix.basename(key).startsWith('_')) {
         if (filesListedInImports.has(key)) {
           return [file]
         }
