@@ -53,7 +53,15 @@ export default function shopifyClean (options: VitePluginShopifyCleanOptions = {
         const location = path.join(assetsDir, base)
 
         if (existsSync(location)) {
-          return fs.unlink(location)
+          try {
+            await fs.unlink(location)
+          } catch (err: any) {
+            // Ignore files that no longer exist; they may have been removed by another process
+            if (err && err.code !== 'ENOENT') {
+              console.warn(`WARNING: Failed to delete asset ${location}: ${err.message ?? err}`)
+            }
+          }
+          return
         }
 
         return Promise.resolve()
@@ -62,8 +70,7 @@ export default function shopifyClean (options: VitePluginShopifyCleanOptions = {
 
     writeBundle: async function (_, bundle) {
       if (!(resolvedOptions.manifestFileName in bundle)) return
-      if (!this.meta.watchMode) return
-      if (writeBundleFirstRun) {
+      if (this.meta.watchMode && writeBundleFirstRun) {
         writeBundleFirstRun = false
 
         return
@@ -106,7 +113,15 @@ export default function shopifyClean (options: VitePluginShopifyCleanOptions = {
         const location = path.join(assetsDir, file)
 
         if (existsSync(location)) {
-          return fs.unlink(location)
+          try {
+            await fs.unlink(location)
+          } catch (err: any) {
+            // Ignore files that no longer exist; they may have been removed by another process
+            if (err && err.code !== 'ENOENT') {
+              console.warn(`WARNING: Failed to delete asset ${location}: ${err.message ?? err}`)
+            }
+          }
+          return
         }
 
         return Promise.resolve()
