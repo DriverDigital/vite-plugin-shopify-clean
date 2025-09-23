@@ -4,6 +4,14 @@ Vite plugin that correctly cleans up your Shopify theme `assets/` folder across 
 
 Why you might need this: when Vite emits hashed filenames (e.g., `app-abc123.js`), older hashed files can accumulate over time. This plugin removes outdated assets safely so your `assets/` directory stays tidy and your theme only references current files.
 
+[GitHub](https://github.com/DriverDigital/vite-plugin-shopify-clean)
+
+[npm](https://www.npmjs.com/package/@driver-digital/vite-plugin-shopify-clean)
+
+[Issues](https://github.com/DriverDigital/vite-plugin-shopify-clean/issues)
+
+[Changelog](https://github.com/DriverDigital/vite-plugin-shopify-clean/blob/main/CHANGELOG.md)
+
 ## Features
 
 - Cleans pre-existing assets listed in the last manifest at the start of a build.
@@ -86,30 +94,9 @@ Defaults used by the plugin:
 - Write bundle (`writeBundle`)
   - After new assets are written (both during dev and production build), the plugin identifies older hashed variants of files (same base name, different hash) in `assets/` and removes those. This keeps only the current hashed files per entry.
 
-Implementation details for safety and compatibility:
-
-- Uses `this.meta.watchMode` to detect watch mode (no `process.env` checks required).
-- Matches hashed variants with a precise, anchored regex (`^name-[^.]+\.ext$`) to avoid false positives.
-- Compares manifest entries and on-disk files by basename to avoid path mismatches.
-- Treats underscore-prefixed manifest keys (e.g., `_partial.scss`) conservatively, only including them if referenced by other entries.
-- Uses Node’s async `fs.promises` APIs.
-- Deletions are resilient: ENOENT (file-not-found) is ignored to avoid crashes if files were already removed by another process.
-
-## Limitations and expectations
-
-- Your build should produce a Vite manifest accessible under the theme `assets/` directory (e.g., `assets/.vite/manifest.json`). If your Shopify integration writes it to a different location, adjust `manifestFileName` and/or `themeRoot`.
-- The cleanup logic assumes hashed filenames follow a `name-hash.ext` convention (the default behavior for Vite’s hashed output).
-
-## Troubleshooting
-
-- "No assets folder located" warning:
-  - Ensure `themeRoot` points to the root of your Shopify theme and that an `assets/` directory exists.
-- "No manifest" warning:
-  - Ensure your Vite build emits a manifest in `assets/` (or adjust `manifestFileName`). Many Shopify + Vite integrations copy or emit the manifest into your theme assets.
-
 ## Changelog
 
-See `CHANGELOG.md` for release notes.
+See [CHANGELOG.md](https://github.com/DriverDigital/vite-plugin-shopify-clean/blob/main/CHANGELOG.md) for release notes.
 
 ## License
 
