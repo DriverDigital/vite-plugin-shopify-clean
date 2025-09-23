@@ -7,7 +7,7 @@ Why you might need this: when Vite emits hashed filenames (e.g., `app-abc123.js`
 ## Features
 
 - Cleans pre-existing assets listed in the last manifest at the start of a build.
-- In watch mode, removes prior hashed variants when a new hashed file is written.
+- Removes prior hashed variants after each build output is written — in both dev (watch) and production builds — keeping only the current hashed files.
 - Uses Rollup/Vite `watchMode` (no env var required) to control watch-specific behavior.
 - Works with the Shopify theme assets directory structure.
 - Minimal configuration; sensible defaults.
@@ -31,7 +31,7 @@ Add the plugin to your Vite config alongside Barrel's [Shopify Vite Plugin](http
 // vite.config.mjs
 import { defineConfig } from 'vite'
 import shopify from 'vite-plugin-shopify'
-import cleanup from '@driver-digital/vite-plugin-shopify-clean'
+import shopifyClean from '@driver-digital/vite-plugin-shopify-clean'
 
 export default defineConfig({
   build: {
@@ -39,7 +39,7 @@ export default defineConfig({
     sourcemap: true,
   },
   plugins: [
-    cleanup({
+    shopifyClean({
       // themeRoot: './',
       // manifestFileName: '.vite/manifest.json',
     }),
@@ -83,8 +83,8 @@ Defaults used by the plugin:
 
 - Build start (`buildStart`)
   - If `assets/.vite/manifest.json` exists (or your configured path), the plugin reads the previously emitted assets and removes them from `assets/` before a fresh build. This prevents stale files from lingering across builds.
-- Write bundle (`writeBundle`, watch mode only)
-  - After new assets are written, the plugin identifies older hashed variants of files (same base name, different hash) in `assets/` and removes those. This keeps only the current hashed files per entry.
+- Write bundle (`writeBundle`)
+  - After new assets are written (both during dev and production build), the plugin identifies older hashed variants of files (same base name, different hash) in `assets/` and removes those. This keeps only the current hashed files per entry.
 
 Implementation details for safety and compatibility:
 
@@ -93,6 +93,7 @@ Implementation details for safety and compatibility:
 - Compares manifest entries and on-disk files by basename to avoid path mismatches.
 - Treats underscore-prefixed manifest keys (e.g., `_partial.scss`) conservatively, only including them if referenced by other entries.
 - Uses Node’s async `fs.promises` APIs.
+- Deletions are resilient: ENOENT (file-not-found) is ignored to avoid crashes if files were already removed by another process.
 
 ## Limitations and expectations
 
