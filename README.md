@@ -104,4 +104,5 @@ MIT
 
 ## Acknowledgements
 
-Originally forked from [@by-association-only/vite-plugin-shopify-clean](https://github.com/dan-gamble/vite-plugin-shopify-clean) (big thanks <3 to Dan Gamble for his work on the original) and modernized for current Vite + Shopify workflows.
+Built and maintained with ♥️ by [Driver Digital](https://www.driver-digital.com), 
+Originally forked from [@by-association-only/vite-plugin-shopify-clean](https://github.com/dan-gamble/vite-plugin-shopify-clean) - major thanks to [Dan Gamble](https://github.com/dan-gamble) for his work on the original.
