@@ -130,7 +130,7 @@ export default function shopifyClean (options: VitePluginShopifyCleanOptions = {
   }
 }
 
-function getFilesInManifest (manifest: Manifest): string[] {
+export function getFilesInManifest (manifest: Manifest): string[] {
   const filesListedInImports = new Set(
     Object.values(manifest)
       .map(block => {

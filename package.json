@@ -13,7 +13,6 @@
   ],
   "author": "Driver Digital",
   "license": "MIT",
-  "packageManager": "npm@11.6.0",
   "engines": {
     "node": ">=18.0.0"
   },
@@ -34,10 +33,12 @@
     "dev": "npm run build -- --watch",
     "build": "tsup src/index.ts --dts --format cjs,esm --target node18",
     "watch": "tsup src/index.ts --dts --format cjs,esm --target node18 --watch",
-    "lint": "eslint src --ext .ts,.js --fix"
+    "lint": "eslint src --ext .ts,.js --fix",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "peerDependencies": {
-    "vite": "^5.0.0 || ^7.1.7"
+    "vite": ">=5.0.0"
   },
   "devDependencies": {
     "@types/node": "^24.5.2",
@@ -46,6 +47,8 @@
     "eslint": "^9.36.0",
     "eslint-plugin-import": "^2.32.0",
     "tsup": "^8.5.0",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "vite": "^7.0.0",
+    "vitest": "^3.0.0"
   }
 }
