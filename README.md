@@ -1,6 +1,6 @@
 # @driver-digital/vite-plugin-shopify-clean
 
-Vite plugin that correctly cleans up your Shopify theme `assets/` folder across builds and during watch (HMR). It is designed to be used alongside Barrel's [Shopify Vite Plugin](https://shopify-vite.barrelny.com/).
+Vite plugin that cleans up your Shopify theme `assets/` folder across builds and during watch (HMR). It is designed to be used alongside Barrel's [Shopify Vite Plugin](https://shopify-vite.barrelny.com/).
 
 Why you might need this: when Vite emits hashed filenames (e.g., `app-abc123.js`), older hashed files can accumulate over time. This plugin removes outdated assets safely so your `assets/` directory stays tidy and your theme only references current files.
 
@@ -29,7 +29,7 @@ npm i -D @driver-digital/vite-plugin-shopify-clean
 Peer requirements:
 
 - Node.js: `>=18`
-- Vite: `^5` through `^7`
+- Vite: `>=5`
 
 ## Usage
 
@@ -104,4 +104,4 @@ MIT
 
 ## Acknowledgements
 
-Originally forked from [@by-association-only/vite-plugin-shopify-clean](https://github.com/dan-gamble/vite-plugin-shopify-clean) and modernized for current Vite + Shopify workflows.
+Originally forked from [@by-association-only/vite-plugin-shopify-clean](https://github.com/dan-gamble/vite-plugin-shopify-clean) (big thanks <3 to Dan Gamble for his work on the original) and modernized for current Vite + Shopify workflows.
