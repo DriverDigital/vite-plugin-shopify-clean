@@ -1,5 +1,19 @@
 # @driver-digital/vite-plugin-shopify-clean
 
+## 1.0.3 - 2025-12-09 - CI, testing, and tooling improvements
+
+- Add CI workflow with linting, building, and testing across Node 18, 20, 22, 23.
+- Add Vitest unit tests for `getFilesInManifest` and `resolveOptions`.
+- Add GitHub Action to watch for upstream vite-plugin-shopify releases.
+- Add LICENSE file with proper MIT attribution.
+- Update dependabot configuration.
+- Update dev dependencies.
+
+## 1.0.2 - 2025-09-23 - README and docs updates
+
+- Update README
+- Update docs
+
 ## 1.0.1 - 2025-09-23 - Cleanup robustness and build-time cleaning
 
 - Handle ENOENT during deletions to prevent crashes when files are already removed (race-safe) in `buildStart()` and `writeBundle()`.
