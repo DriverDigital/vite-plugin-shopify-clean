@@ -9,7 +9,7 @@ jobs:
   check-release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4.2.2
+      - uses: actions/checkout@v6.0.1
 
       - name: Get latest vite-plugin-shopify release
         id: upstream
