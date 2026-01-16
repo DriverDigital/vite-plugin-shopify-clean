@@ -72,6 +72,8 @@ export default function shopifyClean (options: VitePluginShopifyCleanOptions = {
       }))
     },
 
+    // writeBundle handles incremental cleanup in watch mode: when files are removed
+    // from the manifest between rebuilds, this hook deletes the stale assets
     writeBundle: async function (_, bundle) {
       if (!(resolvedOptions.manifestFileName in bundle)) return
       if (this.meta.watchMode && writeBundleFirstRun) {

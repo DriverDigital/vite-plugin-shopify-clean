@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import path from 'path'
 import { existsSync, promises as fs } from 'fs'
 import { tmpdir } from 'os'
@@ -140,80 +140,69 @@ describe('getFilesInManifest', () => {
     expect(files).toEqual(['assets/app-abc123.js'])
   })
 
-  it('extracts CSS files from manifest entries (Issue #14)', () => {
-    const manifest: Manifest = {
-      'src/entries/main.js': {
-        file: 'main-BsuslCtz.js',
-        name: 'main',
-        src: 'src/entries/main.js',
-        isEntry: true,
-        css: ['main-B-h0qzzI.css'],
+  describe('CSS extraction (Issue #14)', () => {
+    it.each([
+      {
+        scenario: 'single CSS file from single entry',
+        manifest: {
+          'src/entries/main.js': {
+            file: 'main-BsuslCtz.js',
+            name: 'main',
+            src: 'src/entries/main.js',
+            isEntry: true,
+            css: ['main-B-h0qzzI.css'],
+          },
+        } as Manifest,
+        expectedFiles: ['main-BsuslCtz.js', 'main-B-h0qzzI.css'],
       },
-    }
-
-    const files = getFilesInManifest(manifest)
-
-    expect(files).toContain('main-BsuslCtz.js')
-    expect(files).toContain('main-B-h0qzzI.css')
-    expect(files).toHaveLength(2)
-  })
-
-  it('extracts multiple CSS files from a single entry', () => {
-    const manifest: Manifest = {
-      'src/app.ts': {
-        file: 'app-abc123.js',
-        src: 'src/app.ts',
-        isEntry: true,
-        css: ['app-def456.css', 'vendor-ghi789.css'],
+      {
+        scenario: 'multiple CSS files from single entry',
+        manifest: {
+          'src/app.ts': {
+            file: 'app-abc123.js',
+            src: 'src/app.ts',
+            isEntry: true,
+            css: ['app-def456.css', 'vendor-ghi789.css'],
+          },
+        } as Manifest,
+        expectedFiles: ['app-abc123.js', 'app-def456.css', 'vendor-ghi789.css'],
       },
-    }
-
-    const files = getFilesInManifest(manifest)
-
-    expect(files).toContain('app-abc123.js')
-    expect(files).toContain('app-def456.css')
-    expect(files).toContain('vendor-ghi789.css')
-    expect(files).toHaveLength(3)
-  })
-
-  it('extracts CSS files from multiple entries', () => {
-    const manifest: Manifest = {
-      'src/entries/main.js': {
-        file: 'main-BsuslCtz.js',
-        src: 'src/entries/main.js',
-        isEntry: true,
-        css: ['main-B-h0qzzI.css'],
+      {
+        scenario: 'CSS files from multiple entries',
+        manifest: {
+          'src/entries/main.js': {
+            file: 'main-BsuslCtz.js',
+            src: 'src/entries/main.js',
+            isEntry: true,
+            css: ['main-B-h0qzzI.css'],
+          },
+          'src/entries/two.js': {
+            file: 'two-BKsaVOyl.js',
+            src: 'src/entries/two.js',
+            isEntry: true,
+            css: ['two-ClAXSmEv.css'],
+          },
+        } as Manifest,
+        expectedFiles: ['main-BsuslCtz.js', 'main-B-h0qzzI.css', 'two-BKsaVOyl.js', 'two-ClAXSmEv.css'],
       },
-      'src/entries/two.js': {
-        file: 'two-BKsaVOyl.js',
-        src: 'src/entries/two.js',
-        isEntry: true,
-        css: ['two-ClAXSmEv.css'],
+      {
+        scenario: 'empty css array',
+        manifest: {
+          'src/app.ts': {
+            file: 'app-abc123.js',
+            src: 'src/app.ts',
+            isEntry: true,
+            css: [],
+          },
+        } as Manifest,
+        expectedFiles: ['app-abc123.js'],
       },
-    }
+    ])('extracts $scenario', ({ manifest, expectedFiles }) => {
+      const files = getFilesInManifest(manifest)
 
-    const files = getFilesInManifest(manifest)
-
-    expect(files).toContain('main-BsuslCtz.js')
-    expect(files).toContain('main-B-h0qzzI.css')
-    expect(files).toContain('two-BKsaVOyl.js')
-    expect(files).toContain('two-ClAXSmEv.css')
-    expect(files).toHaveLength(4)
-  })
-
-  it('handles entries with empty css array', () => {
-    const manifest: Manifest = {
-      'src/app.ts': {
-        file: 'app-abc123.js',
-        src: 'src/app.ts',
-        isEntry: true,
-        css: [],
-      },
-    }
-
-    const files = getFilesInManifest(manifest)
-
-    expect(files).toEqual(['app-abc123.js'])
+      expect(files).toHaveLength(expectedFiles.length)
+      expectedFiles.forEach(f => expect(files).toContain(f))
+    })
   })
 
   it('excludes CSS from underscore-prefixed files that are not imported', () => {
@@ -289,26 +278,20 @@ describe('shopifyClean plugin hooks', () => {
       expect(existsSync(path.join(assetsDir, 'app-old123.js'))).toBe(false)
     })
 
-    it('warns when assets folder does not exist', async () => {
-      await fs.rm(assetsDir, { recursive: true, force: true })
+    it.each([
+      { scenario: 'assets folder does not exist', removeAssets: true, expectedWarning: 'No assets folder' },
+      { scenario: 'manifest file does not exist', removeAssets: false, expectedWarning: 'No .vite/manifest.json' },
+    ])('warns when $scenario', async ({ removeAssets, expectedWarning }) => {
+      if (removeAssets) {
+        await fs.rm(assetsDir, { recursive: true, force: true })
+      }
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
       const plugin = shopifyClean({ themeRoot: tempDir })
       const ctx = createMockPluginContext(false)
       await (plugin.buildStart as Function).call(ctx)
 
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('No assets folder'))
-      warnSpy.mockRestore()
-    })
-
-    it('warns when manifest file does not exist', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-      const plugin = shopifyClean({ themeRoot: tempDir })
-      const ctx = createMockPluginContext(false)
-      await (plugin.buildStart as Function).call(ctx)
-
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('No .vite/manifest.json'))
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining(expectedWarning))
       warnSpy.mockRestore()
     })
 
