@@ -8,17 +8,24 @@ updates:
   # Keep npm dependencies up to date
   - package-ecosystem: "npm"
     directory: "/"
+    target-branch: "develop"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
     # Raise all npm pull requests with assignees
     assignees:
       - "mcarter-astronautdev"
+    groups:
+      # Group all npm updates into a single pull request
+      dependencies:
+        patterns:
+          - "*"
 
   # Keep GitHub Actions dependencies up to date
   - package-ecosystem: "github-actions"
     directory: "/"
+    target-branch: "develop"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
     # Raise all GitHub Actions pull requests with assignees
     assignees:
       - "mcarter-astronautdev"
