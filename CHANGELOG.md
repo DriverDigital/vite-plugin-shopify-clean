@@ -1,5 +1,10 @@
 # @driver-digital/vite-plugin-shopify-clean
 
+## 1.0.5 - 2026-01-21 - Dependency updates
+
+- Update GitHub Actions (actions/setup-node 6.1.0 → 6.2.0).
+- Update dev dependencies (@types/node, @typescript-eslint/eslint-plugin, @typescript-eslint/parser, vitest).
+
 ## 1.0.4 - 2026-01-21 - Fix CSS cleaning logic
 
 - Fix CSS asset cleanup by replacing regex matching with manifest comparison.
