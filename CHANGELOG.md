@@ -1,5 +1,13 @@
 # @driver-digital/vite-plugin-shopify-clean
 
+## 1.0.4 - 2026-01-21 - Fix CSS cleaning logic
+
+- Fix CSS asset cleanup by replacing regex matching with manifest comparison.
+- Add `safeUnlink` helper with proper error type handling.
+- Track previous manifest files for accurate writeBundle cleanup.
+- Add comprehensive integration tests with `it.each` pattern.
+- Update dev dependencies (eslint, typescript, vite, tsup, @typescript-eslint/parser).
+
 ## 1.0.3 - 2025-12-09 - CI, testing, and tooling improvements
 
 - Add CI workflow with linting, building, and testing across Node 18, 20, 22, 23.
