@@ -42,7 +42,7 @@
     "vite": ">=5.0.0"
   },
   "devDependencies": {
-    "@types/node": "^24.5.2",
+    "@types/node": "^25.0.9",
     "@typescript-eslint/eslint-plugin": "^8.44.1",
     "@typescript-eslint/parser": "^8.44.1",
     "eslint": "^9.36.0",
