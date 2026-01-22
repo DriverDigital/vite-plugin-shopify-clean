@@ -17,8 +17,8 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "main": "./dist/index.js",
-  "module": "./dist/index.mjs",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
     "dist"
@@ -26,13 +26,13 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "require": "./dist/index.js",
-      "import": "./dist/index.mjs"
+      "require": "./dist/index.cjs",
+      "import": "./dist/index.js"
     }
   },
   "scripts": {
     "dev": "npm run build -- --watch",
-    "build": "tsup src/index.ts --dts --format cjs,esm --target node18",
+    "build": "tsup src/index.ts --dts --format cjs,esm --target node18 --clean",
     "watch": "tsup src/index.ts --dts --format cjs,esm --target node18 --watch",
     "lint": "eslint src --ext .ts,.js --fix",
     "test": "vitest run",
