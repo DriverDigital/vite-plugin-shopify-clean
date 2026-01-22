@@ -10,7 +10,25 @@ Instructions for releasing a new version of @driver-digital/vite-plugin-shopify-
 
 ## Steps
 
-### 1. Analyze changes since last release
+### 1. Verify package integrity
+
+Run the pre-publish verification to catch configuration issues before release:
+
+```bash
+npm run verify-package
+```
+
+This checks:
+- Build succeeds
+- All package.json export paths exist
+- CJS and ESM imports work correctly
+- TypeScript types compile
+- Package contents are correct (npm pack)
+- Configuration consistency (engines, extensions)
+
+**Do not proceed if any checks fail.**
+
+### 2. Analyze changes since last release
 
 Compare `develop` to `main` to understand what's being released:
 
@@ -22,11 +40,11 @@ git diff origin/main..develop --stat
 
 Review the commits and changed files to categorize the release.
 
-### 2. Check README.md is up to date
+### 3. Check README.md is up to date
 
 Review `README.md` against the current codebase to ensure documentation reflects any new features, changed options, or updated usage patterns included in this release.
 
-### 3. Determine version bump type
+### 4. Determine version bump type
 
 Based on the changes, decide the version type:
 
@@ -36,7 +54,7 @@ Based on the changes, decide the version type:
 | `minor` | New features that are backwards compatible | 1.0.2 � 1.1.0 |
 | `major` | Breaking changes (API changes, removed features, changed defaults) | 1.0.2 � 2.0.0 |
 
-### 4. Bump the version
+### 5. Bump the version
 
 Run the appropriate npm version command on `develop`:
 
@@ -46,7 +64,7 @@ npm version patch   # or minor, or major
 
 This updates `package.json` and creates a git commit and tag automatically.
 
-### 5. Update CHANGELOG.md
+### 6. Update CHANGELOG.md
 
 Add a new entry at the top of the changelog following the existing format:
 
@@ -65,13 +83,13 @@ git commit --amend --no-edit
 git tag -f vX.Y.Z   # Re-tag to include changelog in the tagged commit
 ```
 
-### 6. Push to develop
+### 7. Push to develop
 
 ```bash
 git push origin develop --tags
 ```
 
-### 7. Merge to main
+### 8. Merge to main
 
 ```bash
 git checkout main
@@ -80,7 +98,7 @@ git merge develop
 git push origin main --tags
 ```
 
-### 8. Create GitHub Release (required before npm publish)
+### 9. Create GitHub Release (required before npm publish)
 
 **IMPORTANT: The GitHub Release must be created before publishing to npm.**
 
@@ -111,7 +129,7 @@ Go to https://github.com/DriverDigital/vite-plugin-shopify-clean/releases/new
 3. Copy release notes from CHANGELOG.md
 4. Click "Publish release"
 
-### 9. Publish to npm
+### 10. Publish to npm
 
 **STOP: The user must complete this step.**
 
@@ -125,7 +143,7 @@ Authentication in the browser using a OTP will be requested.
 
 Verify the release at: https://www.npmjs.com/package/@driver-digital/vite-plugin-shopify-clean
 
-### 10. Return to develop
+### 11. Return to develop
 
 ```bash
 git checkout develop
