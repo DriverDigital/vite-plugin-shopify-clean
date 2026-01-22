@@ -105,7 +105,7 @@ git push origin main --tags
 **Option A: Using GitHub CLI (recommended)**
 
 ```bash
-gh release create vX.Y.Z --title "vX.Y.Z" --notes "$(cat << 'EOF'
+gh release create vX.Y.Z --repo DriverDigital/vite-plugin-shopify-clean --title "vX.Y.Z" --notes "$(cat << 'EOF'
 ## Brief description
 
 - Change 1
@@ -117,8 +117,10 @@ EOF
 Or to auto-generate notes from commits:
 
 ```bash
-gh release create vX.Y.Z --title "vX.Y.Z" --generate-notes
+gh release create vX.Y.Z --repo DriverDigital/vite-plugin-shopify-clean --title "vX.Y.Z" --generate-notes
 ```
+
+Note: The `--repo` flag is required because this repo has an `upstream` remote pointing to the original fork, which can confuse the `gh` CLI.
 
 **Option B: Using GitHub UI**
 
