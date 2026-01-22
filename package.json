@@ -33,7 +33,7 @@
   "scripts": {
     "dev": "npm run build -- --watch",
     "build": "tsup src/index.ts --dts --format cjs,esm --target node18 --clean",
-    "watch": "tsup src/index.ts --dts --format cjs,esm --target node18 --watch",
+    "watch": "tsup src/index.ts --dts --format cjs,esm --target node18 --clean --watch",
     "lint": "eslint src --ext .ts,.js --fix",
     "test": "vitest run",
     "test:watch": "vitest"

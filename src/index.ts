@@ -136,6 +136,11 @@ export function getFilesInManifest (manifest: Manifest): string[] {
         if ('css' in block && Array.isArray(block.css)) {
           files.push(...block.css)
         }
+
+        // Add associated asset files (images, fonts, etc.)
+        if ('assets' in block && Array.isArray(block.assets)) {
+          files.push(...block.assets)
+        }
       }
 
       return files
