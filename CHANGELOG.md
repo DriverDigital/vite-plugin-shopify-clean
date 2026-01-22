@@ -1,5 +1,11 @@
 # @driver-digital/vite-plugin-shopify-clean
 
+## 1.1.0 - 2026-01-23 - Asset file extraction
+
+- Expand manifest file extraction to include asset files (images, fonts, etc.) in addition to JS and CSS.
+- Add pre-publish verification script (`npm run verify-package`) for release quality assurance.
+- Update publish documentation.
+
 ## 1.0.6 - 2026-01-22 - Fix ESM export path
 
 - Fix ESM export path pointing to stale `index.mjs` instead of `index.js`.
