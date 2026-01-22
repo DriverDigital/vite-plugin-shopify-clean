@@ -1,5 +1,12 @@
 # @driver-digital/vite-plugin-shopify-clean
 
+## 1.0.6 - 2026-01-22 - Fix ESM export path
+
+- Fix ESM export path pointing to stale `index.mjs` instead of `index.js`.
+- Fix CJS export path pointing to `index.js` (ESM) instead of `index.cjs`.
+- Add `--clean` flag to build script to prevent stale files from persisting.
+- This fixes Issue #14 where CSS files were not being cleaned for ESM consumers.
+
 ## 1.0.5 - 2026-01-21 - Dependency updates
 
 - Update GitHub Actions (actions/setup-node 6.1.0 → 6.2.0).
