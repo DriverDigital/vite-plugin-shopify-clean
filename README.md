@@ -36,7 +36,7 @@ Peer requirements:
 Add the plugin to your Vite config alongside Barrel's [Shopify Vite Plugin](https://shopify-vite.barrelny.com/).
 
 ```js
-// vite.config.mjs
+// vite.config.js
 import { defineConfig } from 'vite'
 import shopify from 'vite-plugin-shopify'
 import shopifyClean from '@driver-digital/vite-plugin-shopify-clean'
