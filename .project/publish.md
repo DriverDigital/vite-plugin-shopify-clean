@@ -8,6 +8,52 @@ Instructions for releasing a new version of @driver-digital/vite-plugin-shopify-
 - All changes intended for release must be committed to `develop`
 - CI must be passing on `develop`
 
+## Local Testing
+
+Before publishing, test the plugin in a real Shopify theme project to verify it works as expected.
+
+**Test repository:** <!-- TODO: Add link to test repo -->
+
+**Steps:**
+
+1. Build and pack the plugin:
+   ```bash
+   npm run build
+   npm pack
+   # Creates: driver-digital-vite-plugin-shopify-clean-X.Y.Z.tgz
+   ```
+
+2. In the test project, install the tarball:
+   ```bash
+   npm install /path/to/driver-digital-vite-plugin-shopify-clean-X.Y.Z.tgz
+   ```
+
+3. Run both build modes and verify cleanup works:
+   ```bash
+   # Production build - should clean old assets at buildStart
+   vite build
+
+   # Dev/watch mode - should clean stale assets on rebuild
+   vite dev
+   ```
+
+4. Verify:
+   - Old hashed files are removed from `assets/`
+   - Current build files remain intact
+   - No errors or unexpected warnings in console
+
+**Alternative: npm link (for rapid iteration)**
+
+```bash
+# In this plugin directory
+npm link
+
+# In test project
+npm link @driver-digital/vite-plugin-shopify-clean
+```
+
+Note: Symlinks can occasionally behave differently than real installs. Use `npm pack` for final verification.
+
 ## Steps
 
 ### 1. Verify package integrity

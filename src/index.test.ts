@@ -94,6 +94,7 @@ describe('getFilesInManifest', () => {
   })
 })
 
+// TODO: Add test for custom manifestFileName option
 describe('shopifyClean plugin', () => {
   let tempDir: string
   let assetsDir: string
