@@ -42,7 +42,18 @@ Review the commits and changed files to categorize the release.
 
 ### 3. Check README.md is up to date
 
-Review `README.md` against the current codebase to ensure documentation reflects any new features, changed options, or updated usage patterns included in this release.
+Perform a thorough review of `README.md` against the actual implementation in `src/index.ts` and `src/options.ts`. This is not a superficial check — read the source code and verify the README accurately describes how the plugin works.
+
+**Checklist:**
+
+- [ ] **Features section**: Each bullet point accurately describes current behavior
+- [ ] **"How it works" section**: Technical descriptions match the actual `buildStart` and `writeBundle` implementations
+- [ ] **Options section**: All options in `VitePluginShopifyCleanOptions` are documented with correct defaults
+- [ ] **Usage example**: The example config is valid and shows current best practices
+- [ ] **File types**: README mentions all file types the plugin tracks (check `getFilesInManifest` for JS, CSS, assets, etc.)
+- [ ] **Cleanup mechanism**: README correctly describes how cleanup decisions are made (manifest comparison vs hash matching, etc.)
+
+**If any discrepancies are found**, update the README and commit to `develop` before proceeding with the version bump.
 
 ### 4. Determine version bump type
 
@@ -138,6 +149,7 @@ Go to https://github.com/DriverDigital/vite-plugin-shopify-clean/releases/new
 Once the user confirms they want to publish, tell them to open a new terminal and run:
 
 ```bash
+npm login
 npm publish
 ```
 

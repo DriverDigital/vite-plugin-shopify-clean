@@ -15,7 +15,8 @@ Why you might need this: when Vite emits hashed filenames (e.g., `app-abc123.js`
 ## Features
 
 - Cleans pre-existing assets listed in the last manifest at the start of a build.
-- Removes prior hashed variants after each build output is written — in both dev (watch) and production builds — keeping only the current hashed files.
+- Removes stale assets after each build by comparing the previous manifest to the current one — in both dev (watch) and production builds.
+- Tracks JS, CSS, and asset files (images, fonts, etc.) from the manifest.
 - Uses Rollup/Vite `watchMode` (no env var required) to control watch-specific behavior.
 - Works with the Shopify theme assets directory structure.
 - Minimal configuration; sensible defaults.
@@ -44,7 +45,7 @@ import shopifyClean from '@driver-digital/vite-plugin-shopify-clean'
 export default defineConfig({
   build: {
     emptyOutDir: false,
-    sourcemap: true,
+    sourcemap: true
   },
   plugins: [
     shopifyClean({
@@ -52,8 +53,10 @@ export default defineConfig({
       // manifestFileName: '.vite/manifest.json',
     }),
     shopify({
-      snippetFile: 'vite.liquid',
-    }),
+      tunnel: true,
+      themeRoot: ".",
+      sourceCodeDir: "frontend"
+    })
   ],
 })
 ```
@@ -89,10 +92,12 @@ Defaults used by the plugin:
 
 ## How it works
 
+The plugin tracks files listed in Vite's manifest (JS, CSS, and asset files like images and fonts) and uses manifest comparison to determine what to clean.
+
 - Build start (`buildStart`)
   - If `assets/.vite/manifest.json` exists (or your configured path), the plugin reads the previously emitted assets and removes them from `assets/` before a fresh build. This prevents stale files from lingering across builds.
 - Write bundle (`writeBundle`)
-  - After new assets are written (both during dev and production build), the plugin identifies older hashed variants of files (same base name, different hash) in `assets/` and removes those. This keeps only the current hashed files per entry.
+  - After new assets are written, the plugin compares the previous manifest to the current one. Any files that were in the old manifest but are no longer in the new manifest are deleted. This handles cases where entry points are renamed or removed between builds.
 
 ## Changelog
 
