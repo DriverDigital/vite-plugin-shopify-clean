@@ -8,13 +8,13 @@ Instructions for releasing a new version of @driver-digital/vite-plugin-shopify-
 - All changes intended for release must be committed to `develop`
 - CI must be passing on `develop`
 
-## Local Testing
+## Steps
 
-Before publishing, test the plugin in a real Shopify theme project to verify it works as expected.
+### 1. Run integration test
+
+Test the plugin in a real Shopify theme project to verify it works as expected.
 
 **Test repository:** https://github.com/DriverDigital/sandbox-vite-plugin-shopify-clean
-
-### Automated testing (recommended)
 
 Clone the sandbox repo as a sibling directory, then run:
 
@@ -39,52 +39,9 @@ This script will:
 - Current build files are present
 - No errors in console
 
-**To test dev/watch mode** (manual):
+**Do not proceed if any checks fail.**
 
-```bash
-cd ../sandbox-vite-plugin-shopify-clean
-npm run dev
-# Make changes to frontend files and verify stale assets are cleaned on rebuild
-```
-
-### Manual testing (alternative)
-
-1. Build and pack the plugin:
-   ```bash
-   npm run build
-   npm pack
-   # Creates: driver-digital-vite-plugin-shopify-clean-X.Y.Z.tgz
-   ```
-
-2. In the test project, install the tarball:
-   ```bash
-   npm install /path/to/driver-digital-vite-plugin-shopify-clean-X.Y.Z.tgz
-   ```
-
-3. Run both build modes and verify cleanup works:
-   ```bash
-   # Production build - should clean old assets at buildStart
-   vite build
-
-   # Dev/watch mode - should clean stale assets on rebuild
-   vite dev
-   ```
-
-**Alternative: npm link (for rapid iteration)**
-
-```bash
-# In this plugin directory
-npm link
-
-# In test project
-npm link @driver-digital/vite-plugin-shopify-clean
-```
-
-Note: Symlinks can occasionally behave differently than real installs. Use `npm pack` for final verification.
-
-## Steps
-
-### 1. Verify package integrity
+### 2. Verify package integrity
 
 Run the pre-publish verification to catch configuration issues before release:
 
@@ -102,7 +59,7 @@ This checks:
 
 **Do not proceed if any checks fail.**
 
-### 2. Analyze changes since last release
+### 3. Analyze changes since last release
 
 Compare `develop` to `main` to understand what's being released:
 
@@ -114,7 +71,7 @@ git diff origin/main..develop --stat
 
 Review the commits and changed files to categorize the release.
 
-### 3. Check README.md is up to date
+### 4. Check README.md is up to date
 
 Perform a thorough review of `README.md` against the actual implementation in `src/index.ts` and `src/options.ts`. This is not a superficial check — read the source code and verify the README accurately describes how the plugin works.
 
@@ -129,17 +86,17 @@ Perform a thorough review of `README.md` against the actual implementation in `s
 
 **If any discrepancies are found**, update the README and commit to `develop` before proceeding with the version bump.
 
-### 4. Determine version bump type
+### 5. Determine version bump type
 
 Based on the changes, decide the version type:
 
 | Type | When to use | Example |
 |------|-------------|---------|
-| `patch` | Bug fixes, documentation, internal refactors with no API changes | 1.0.2 � 1.0.3 |
-| `minor` | New features that are backwards compatible | 1.0.2 � 1.1.0 |
-| `major` | Breaking changes (API changes, removed features, changed defaults) | 1.0.2 � 2.0.0 |
+| `patch` | Bug fixes, documentation, internal refactors with no API changes | 1.0.2 → 1.0.3 |
+| `minor` | New features that are backwards compatible | 1.0.2 → 1.1.0 |
+| `major` | Breaking changes (API changes, removed features, changed defaults) | 1.0.2 → 2.0.0 |
 
-### 5. Bump the version
+### 6. Bump the version
 
 Run the appropriate npm version command on `develop`:
 
@@ -149,7 +106,7 @@ npm version patch   # or minor, or major
 
 This updates `package.json` and creates a git commit and tag automatically.
 
-### 6. Update CHANGELOG.md
+### 7. Update CHANGELOG.md
 
 Add a new entry at the top of the changelog following the existing format:
 
@@ -168,13 +125,13 @@ git commit --amend --no-edit
 git tag -f vX.Y.Z   # Re-tag to include changelog in the tagged commit
 ```
 
-### 7. Push to develop
+### 8. Push to develop
 
 ```bash
 git push origin develop --tags
 ```
 
-### 8. Merge to main
+### 9. Merge to main
 
 ```bash
 git checkout main
@@ -183,7 +140,7 @@ git merge develop
 git push origin main --tags
 ```
 
-### 9. Create GitHub Release (required before npm publish)
+### 10. Create GitHub Release (required before npm publish)
 
 **IMPORTANT: The GitHub Release must be created before publishing to npm.**
 
@@ -216,7 +173,7 @@ Go to https://github.com/DriverDigital/vite-plugin-shopify-clean/releases/new
 3. Copy release notes from CHANGELOG.md
 4. Click "Publish release"
 
-### 10. Publish to npm
+### 11. Publish to npm
 
 **STOP: The user must complete this step.**
 
@@ -231,7 +188,7 @@ Authentication in the browser using a OTP will be requested.
 
 Verify the release at: https://www.npmjs.com/package/@driver-digital/vite-plugin-shopify-clean
 
-### 11. Return to develop
+### 12. Return to develop
 
 ```bash
 git checkout develop
@@ -247,3 +204,50 @@ git checkout develop
   git reset --hard HEAD~1
   git tag -d vX.Y.Z
   ```
+
+## Alternative Testing Methods
+
+These are fallback options if you need to test differently than the standard `npm run test:sandbox` workflow.
+
+### Manual tarball testing
+
+1. Build and pack the plugin:
+   ```bash
+   npm run build
+   npm pack
+   # Creates: driver-digital-vite-plugin-shopify-clean-X.Y.Z.tgz
+   ```
+
+2. In the test project, install the tarball:
+   ```bash
+   npm install /path/to/driver-digital-vite-plugin-shopify-clean-X.Y.Z.tgz
+   ```
+
+3. Run both build modes and verify cleanup works:
+   ```bash
+   # Production build - should clean old assets at buildStart
+   vite build
+
+   # Dev/watch mode - should clean stale assets on rebuild
+   vite dev
+   ```
+
+### npm link (for rapid iteration)
+
+```bash
+# In this plugin directory
+npm link
+
+# In test project
+npm link @driver-digital/vite-plugin-shopify-clean
+```
+
+Note: Symlinks can occasionally behave differently than real installs. Use `npm pack` for final verification.
+
+### Testing dev/watch mode
+
+```bash
+cd ../sandbox-vite-plugin-shopify-clean
+npm run dev
+# Make changes to frontend files and verify stale assets are cleaned on rebuild
+```

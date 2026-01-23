@@ -6,7 +6,6 @@ SANDBOX_DIR="../sandbox-vite-plugin-shopify-clean"
 ASSETS_DIR="$SANDBOX_DIR/assets"
 
 echo "=== Building and packing plugin ==="
-rm -f driver-digital-vite-plugin-shopify-clean-*.tgz
 npm run build
 TARBALL=$(npm pack | tail -1)
 
@@ -51,3 +50,4 @@ echo "  3. npm run dev"
 echo ""
 cd "$PLUGIN_DIR"
 echo "Returned to plugin directory."
+rm -f driver-digital-vite-plugin-shopify-clean-*.tgz

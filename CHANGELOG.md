@@ -1,5 +1,12 @@
 # @driver-digital/vite-plugin-shopify-clean
 
+## 1.1.1 - 2026-01-23 - Documentation and tooling
+
+- Add integration test script (`npm run test:sandbox`) for local testing before publish.
+- Restructure publish workflow: integration test is now Step 1; manual testing moved to appendix.
+- Simplify options resolution.
+- Fix `gh release` command to specify repo explicitly.
+
 ## 1.1.0 - 2026-01-23 - Asset file extraction
 
 - Expand manifest file extraction to include asset files (images, fonts, etc.) in addition to JS and CSS.
