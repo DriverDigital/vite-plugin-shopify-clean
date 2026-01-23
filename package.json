@@ -37,7 +37,8 @@
     "lint": "eslint src --ext .ts,.js --fix",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify-package": "node scripts/verify-package.mjs"
+    "verify-package": "node scripts/verify-package.mjs",
+    "test:sandbox": "bash scripts/test-integration.sh"
   },
   "peerDependencies": {
     "vite": ">=5.0.0"

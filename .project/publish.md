@@ -12,9 +12,42 @@ Instructions for releasing a new version of @driver-digital/vite-plugin-shopify-
 
 Before publishing, test the plugin in a real Shopify theme project to verify it works as expected.
 
-**Test repository:** <!-- TODO: Add link to test repo -->
+**Test repository:** https://github.com/DriverDigital/sandbox-vite-plugin-shopify-clean
 
-**Steps:**
+### Automated testing (recommended)
+
+Clone the sandbox repo as a sibling directory, then run:
+
+```bash
+npm run test:sandbox
+```
+
+This script will:
+1. Build and pack the plugin (cleans up old tarballs first)
+2. Install it in the sandbox repo
+3. Enable the plugin in vite.config.js
+4. Clean assets and create fake stale files
+5. Show assets **before** build (should include `-OLD` stale files)
+6. Run `vite build`
+7. Show assets **after** build (stale files should be removed)
+8. Restore vite.config.js to its original state
+9. Return to the plugin directory
+
+**Verify:**
+- The "before" list includes stale `-OLD` files
+- The "after" list has no `-OLD` files
+- Current build files are present
+- No errors in console
+
+**To test dev/watch mode** (manual):
+
+```bash
+cd ../sandbox-vite-plugin-shopify-clean
+npm run dev
+# Make changes to frontend files and verify stale assets are cleaned on rebuild
+```
+
+### Manual testing (alternative)
 
 1. Build and pack the plugin:
    ```bash
@@ -36,11 +69,6 @@ Before publishing, test the plugin in a real Shopify theme project to verify it 
    # Dev/watch mode - should clean stale assets on rebuild
    vite dev
    ```
-
-4. Verify:
-   - Old hashed files are removed from `assets/`
-   - Current build files remain intact
-   - No errors or unexpected warnings in console
 
 **Alternative: npm link (for rapid iteration)**
 
