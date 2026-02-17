@@ -2,19 +2,21 @@ name: Watch Upstream Releases
 
 on:
   schedule:
-    - cron: '0 9 * * 1'  # Every Monday at 9am UTC
+    - cron: '0 9 1 * *'  # 1st of each month at 9am UTC
   workflow_dispatch:  # Manual trigger for testing
 
 jobs:
   check-release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6.0.2
-
       - name: Get latest vite-plugin-shopify release
         id: upstream
         run: |
           LATEST=$(curl -s https://api.github.com/repos/barrel/shopify-vite/releases/latest | jq -r .tag_name)
+          if [ -z "$LATEST" ] || [ "$LATEST" = "null" ]; then
+            echo "Failed to fetch latest release"
+            exit 1
+          fi
           echo "version=$LATEST" >> $GITHUB_OUTPUT
 
       - name: Check if issue already exists
@@ -22,7 +24,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          EXISTING=$(gh issue list --search "vite-plugin-shopify ${{ steps.upstream.outputs.version }} in:title" --json number --jq 'length')
+          EXISTING=$(gh issue list --state all --search "vite-plugin-shopify ${{ steps.upstream.outputs.version }} in:title" --json number --jq 'length')
           echo "exists=$EXISTING" >> $GITHUB_OUTPUT
 
       - name: Create issue for new release
@@ -34,8 +36,8 @@ jobs:
             --title "Upstream release: vite-plugin-shopify ${{ steps.upstream.outputs.version }}" \
             --body "A new version of [vite-plugin-shopify](https://github.com/barrel/shopify-vite) has been released.
 
-          **Version:** \${{ steps.upstream.outputs.version }}
-          **Release:** https://github.com/barrel/shopify-vite/releases/tag/\${{ steps.upstream.outputs.version }}
+          **Version:** ${{ steps.upstream.outputs.version }}
+          **Release:** https://github.com/barrel/shopify-vite/releases/tag/${{ steps.upstream.outputs.version }}
 
           ### Checklist
           - [ ] Review release notes for breaking changes
