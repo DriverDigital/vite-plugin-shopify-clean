@@ -1,5 +1,11 @@
 # @driver-digital/vite-plugin-shopify-clean
 
+## 1.1.2 - 2026-02-17 - Maintenance
+
+- Update GitHub Actions (`actions/checkout` 6.0.1 → 6.0.2).
+- Update dev dependencies.
+- Improve watch-upstream workflow: change schedule from weekly to monthly, add error handling for API fetch, search all issue states to prevent duplicates, fix template variable escaping, remove unnecessary checkout step.
+
 ## 1.1.1 - 2026-01-23 - Documentation and tooling
 
 - Add integration test script (`npm run test:sandbox`) for local testing before publish.

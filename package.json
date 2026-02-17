@@ -1,6 +1,6 @@
 {
   "name": "@driver-digital/vite-plugin-shopify-clean",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "type": "module",
   "description": "Vite plugin for correctly cleaning up an assets folder",
   "private": false,
