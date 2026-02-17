@@ -188,11 +188,6 @@ Authentication in the browser using a OTP will be requested.
 
 Verify the release at: https://www.npmjs.com/package/@driver-digital/vite-plugin-shopify-clean
 
-### 12. Return to develop
-
-```bash
-git checkout develop
-```
 
 ## Notes
 
