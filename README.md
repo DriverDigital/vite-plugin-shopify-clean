@@ -30,7 +30,7 @@ npm i -D @driver-digital/vite-plugin-shopify-clean
 Peer requirements:
 
 - Node.js: `^20.19.0 || >=22.12.0`
-- Vite: `>=5`
+- Vite: `>=6`
 
 ## Usage
 

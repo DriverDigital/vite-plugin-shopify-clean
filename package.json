@@ -41,7 +41,7 @@
     "test:sandbox": "bash scripts/test-integration.sh"
   },
   "peerDependencies": {
-    "vite": ">=5.0.0"
+    "vite": ">=6.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
