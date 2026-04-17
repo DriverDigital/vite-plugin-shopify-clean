@@ -15,7 +15,7 @@
   "author": "Driver Digital",
   "license": "MIT",
   "engines": {
-    "node": ">=18.0.0"
+    "node": "^20.19.0 || >=22.12.0"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -32,8 +32,8 @@
   },
   "scripts": {
     "dev": "npm run build -- --watch",
-    "build": "tsup src/index.ts --dts --format cjs,esm --target node18 --clean",
-    "watch": "tsup src/index.ts --dts --format cjs,esm --target node18 --clean --watch",
+    "build": "tsup src/index.ts --dts --format cjs,esm --target node20 --clean",
+    "watch": "tsup src/index.ts --dts --format cjs,esm --target node20 --clean --watch",
     "lint": "eslint src --ext .ts,.js --fix",
     "test": "vitest run",
     "test:watch": "vitest",
