@@ -1,5 +1,14 @@
 # @driver-digital/vite-plugin-shopify-clean
 
+## 2.0.0 - 2026-04-17 - Drop Node 18 and Vite 5
+
+- **BREAKING:** Drop Node 18 support. Now requires Node `^20.19.0 || >=22.12.0` (Vite 8 requirement).
+- **BREAKING:** Drop Vite 5 support. Now requires Vite `>=6`.
+- Work around tsup injecting deprecated `baseUrl` with TypeScript 6.
+- Simplify ESLint config.
+- Update dev dependencies.
+- Update GitHub Actions (`actions/setup-node` 6.2.0 → 6.3.0).
+
 ## 1.1.2 - 2026-02-17 - Maintenance
 
 - Update GitHub Actions (`actions/checkout` 6.0.1 → 6.0.2).

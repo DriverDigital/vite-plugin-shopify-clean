@@ -159,7 +159,7 @@ const plugin2 = shopifyClean();
 
 try {
   writeFileSync(testTypesFile, testTypesContent)
-  execSync(`npx tsc --noEmit --strict --skipLibCheck ${testTypesFile}`, { stdio: 'pipe' })
+  execSync(`npx tsc --noEmit --strict --skipLibCheck --ignoreConfig ${testTypesFile}`, { stdio: 'pipe' })
   pass('TypeScript types compile correctly')
 } catch (e) {
   fail('TypeScript types failed to compile')
@@ -204,11 +204,11 @@ section('Configuration consistency')
 const nodeEngine = pkg.engines?.node
 if (nodeEngine) {
   const minNode = parseInt(nodeEngine.match(/\d+/)?.[0] || '0')
-  // tsup build script uses --target node18
-  if (minNode === 18) {
-    pass('engines.node (>=18) matches build target (node18)')
+  // tsup build script uses --target node20
+  if (minNode === 20) {
+    pass('engines.node minimum matches build target (node20)')
   } else {
-    fail(`engines.node mismatch: ${nodeEngine} vs build target node18`)
+    fail(`engines.node mismatch: ${nodeEngine} vs build target node20`)
   }
 }
 

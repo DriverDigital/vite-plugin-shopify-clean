@@ -12,13 +12,8 @@ module.exports = [
       ecmaVersion: 'latest',
       sourceType: 'module'
     },
-    plugins: {
-      import: require('eslint-plugin-import')
-    },
     rules: {
-      ...js.configs.recommended.rules,
-      // Ensure no external config errors out; we don't enforce this rule here
-      'import/no-default-export': 'off'
+      ...js.configs.recommended.rules
     }
   },
   // TypeScript files
@@ -30,16 +25,13 @@ module.exports = [
       parser: require('@typescript-eslint/parser')
     },
     plugins: {
-      '@typescript-eslint': require('@typescript-eslint/eslint-plugin'),
-      import: require('eslint-plugin-import')
+      '@typescript-eslint': require('@typescript-eslint/eslint-plugin')
     },
     rules: {
       // Start with the base recommended JS rules
       ...js.configs.recommended.rules,
       // TS is type-checked by the compiler; turn off undefined for TS
-      'no-undef': 'off',
-      // Ensure no external config errors out; we don't enforce this rule here
-      'import/no-default-export': 'off'
+      'no-undef': 'off'
     }
   }
 ];
