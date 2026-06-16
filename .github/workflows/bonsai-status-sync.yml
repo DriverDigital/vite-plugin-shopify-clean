@@ -1,0 +1,153 @@
+name: Bonsai status sync
+
+# Deterministic (no-agent) Bonsai task-status sync, driven by the GitHub issue/PR lifecycle.
+# Copy into a pilot repo's .github/workflows/. It flips the linked Bonsai task's status by
+# POSTing the Driver Bonsai MCP REST endpoint — serving AI-opened and human-opened PRs alike.
+#
+# STATUS MACHINE (Driver Digital board — use the EXACT strings; the update-status tool matches
+# by exact normalized name and returns STATUS_NOT_FOUND / AMBIGUOUS_MATCH on a miss, so a
+# board rename breaks the call loudly rather than silently):
+#   issue opened (containing @claude)                              -> In Progress
+#   PR opened / reopened / ready_for_review / commits (synchronize) -> Internal Review
+#   PR review: changes_requested                                   -> Revisions Requested
+#   PR review: approved                                            -> Ready for QA
+# The pipeline STOPS at "Ready for QA". From there a PM manually moves the task through
+# Client Review -> Ready to Deploy -> Delivered / Deployed / Completed (the terminal
+# "delivered & billed the client" status). This workflow NEVER sets those three.
+#
+# KNOWN EDGE (deliberately not handled): this subscribes to pull_request_review [submitted] only.
+# If a reviewer DISMISSES a changes_requested review without pushing a commit or submitting a new
+# review, no event fires and the task stays in "Revisions Requested". Normal recovery is a push
+# (synchronize -> Internal Review) or a new review; otherwise a PM nudges the Bonsai status by hand.
+# A `dismissed` handler is omitted because the dismissed payload doesn't expose the prior verdict
+# without an extra API read, and the right target status after a bare dismissal is ambiguous.
+#
+# CASCADE CAVEAT (load-bearing): GitHub does NOT re-trigger workflows from events caused by the
+# default GITHUB_TOKEN. So AI-driven issues/PRs only fire this workflow when authored by a PAT
+# or the Claude GitHub App token — claude-code-action opens/pushes PRs as the App, and the cron
+# orchestrator creates issues with a fine-grained PAT (see templates/github/README.md). A human's
+# own actions always fire it. If status silently never flips, this is the first thing to check.
+#
+# LINKAGE (no dependence on the PR body): the Bonsai task uuid lives in ONE place — the ISSUE body
+# (the orchestrator puts the full task URL there; `uuid=` is its query param). The PR is connected
+# to that issue by GitHub's NATIVE plumbing: the implementer creates a development-linked branch
+# from the issue (`gh issue develop`) and opens the PR from it (+ a `Closes #N`). On a PR / review
+# event this workflow resolves the issue via `closingIssuesReferences` (a development link — and a
+# Closes keyword — both populate it; verified) and greps the uuid out of the ISSUE body. It does NOT
+# read the PR body for a copied URL — the link is the source of truth, so there is no fragile string
+# to omit. On an `issues` event it greps the issue body directly. (Requires `gh` reads — see the
+# read-only permissions block + GITHUB_TOKEN below.)
+
+on:
+  issues:
+    types: [opened]
+  pull_request:
+    # 'reopened' is included so a closed-then-reopened non-draft PR re-asserts Internal Review
+    # (a bare reopen fires neither 'opened' nor 'synchronize' — without it the flip is silently
+    # dropped). The draft guard in the case below still keeps a reopened draft PR as WIP.
+    types: [opened, reopened, ready_for_review, synchronize]
+  pull_request_review:
+    types: [submitted]
+
+# Least privilege: on a PR/review event the resolve step reads the PR's linked issue via the default
+# GITHUB_TOKEN (reads don't cascade, so this is safe). The Bonsai flip uses BONSAI_TOKEN, not
+# GITHUB_TOKEN, so it's unaffected by this block.
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+# One status flip per ref at a time — a rapid push/review burst can't race conflicting writes
+# onto the same task through the single shared browser lock.
+concurrency:
+  group: bonsai-status-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve task uuid + target status
+        id: ctx
+        env:
+          EVENT: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          REVIEW_STATE: ${{ github.event.review.state }}
+          DRAFT: ${{ github.event.pull_request.draft }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          # for the PR/review-event linked-issue resolution (read-only GITHUB_TOKEN)
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          UUID_RE='uuid=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+          TASK_UUID=""
+          # 1) find the Bonsai task uuid (canonical 8-4-4-4-12 shape). It lives in the ISSUE body.
+          if [ "$EVENT" = "issues" ]; then
+            # the orchestrator put the task URL in the issue body
+            TASK_UUID=$(printf '%s' "$ISSUE_BODY" | grep -oiE "$UUID_RE" | head -n1 | cut -d= -f2 || true)
+          elif [ -n "${PR_NUMBER:-}" ]; then
+            # PR / review event: resolve the issue(s) this PR closes (the dev-link populates
+            # closingIssuesReferences natively; a `Closes #N` would too) and grep the ISSUE body.
+            # We never read the PR body for the URL — the issue link is the source of truth.
+            for n in $(gh pr view "$PR_NUMBER" --repo "$REPO" --json closingIssuesReferences \
+                         --jq '.closingIssuesReferences[].number' 2>/dev/null || true); do
+              ibody=$(gh issue view "$n" --repo "$REPO" --json body --jq '.body' 2>/dev/null || true)
+              TASK_UUID=$(printf '%s' "$ibody" | grep -oiE "$UUID_RE" | head -n1 | cut -d= -f2 || true)
+              if [ -n "$TASK_UUID" ]; then break; fi
+            done
+          fi
+
+          # 2) map event -> Bonsai status (EXACT board strings)
+          STATUS=""
+          case "$EVENT" in
+            issues)
+              # only when the issue actually summons the implementer
+              if printf '%s' "$ISSUE_BODY" | grep -qi '@claude'; then STATUS="In Progress"; fi
+              ;;
+            pull_request)
+              case "$ACTION" in
+                ready_for_review) STATUS="Internal Review" ;;
+                # a draft PR being opened / reopened / pushed to is still WIP — don't flip until
+                # it's marked ready_for_review (or a non-draft open/reopen/push lands)
+                opened|reopened|synchronize) [ "$DRAFT" != "true" ] && STATUS="Internal Review" ;;
+              esac
+              ;;
+            pull_request_review)
+              # a review submitted on a still-draft PR shouldn't advance status — drafts stay
+              # pre-Internal-Review (same intent as the draft guard on the opened/synchronize branch)
+              if [ "$DRAFT" != "true" ]; then
+                case "$REVIEW_STATE" in
+                  changes_requested) STATUS="Revisions Requested" ;;
+                  approved)          STATUS="Ready for QA" ;;
+                esac
+              fi
+              ;;
+          esac
+
+          echo "task_uuid=$TASK_UUID" >> "$GITHUB_OUTPUT"
+          echo "status=$STATUS"       >> "$GITHUB_OUTPUT"
+          echo "resolved: event=$EVENT action=${ACTION:-} review=${REVIEW_STATE:-} draft=${DRAFT:-} -> uuid=${TASK_UUID:-<none>} status=${STATUS:-<none>}"
+
+      - name: Update Bonsai
+        if: steps.ctx.outputs.task_uuid != '' && steps.ctx.outputs.status != ''
+        env:
+          # Override BONSAI_URL via a repo/org Actions VARIABLE if the tunnel host changes.
+          BONSAI_URL: ${{ vars.BONSAI_URL || 'https://driver-bonsai-mcp.ngrok.app' }}
+          BONSAI_TOKEN: ${{ secrets.BONSAI_BEARER_TOKEN }}
+        run: |
+          set -euo pipefail
+          # --retry covers transient 5xx (the 503 BROWSER_BUSY lock-timeout, 502 blips). curl never
+          # retries 4xx, so a STATUS_NOT_FOUND board-string miss still fails fast (red, no retry).
+          # --max-time 130 sits ABOVE the server's lock-acquire timeout (LOCK_ACQUIRE_TIMEOUT_MS —
+          # default 120s, lower only if explicitly set) so the server always returns a verdict (a
+          # 200 flip, or a 503 BROWSER_BUSY) rather than curl abandoning a writer still queued on
+          # the lock and then re-POSTing a second waiter. --retry then retries the transient 503;
+          # flips are idempotent so a retry can't double-apply.
+          curl -fsS --retry 3 --retry-delay 30 --max-time 130 -X POST "$BONSAI_URL/tasks/update-status" \
+            -H "Authorization: Bearer $BONSAI_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n --arg uuid '${{ steps.ctx.outputs.task_uuid }}' \
+                        --arg status '${{ steps.ctx.outputs.status }}' \
+                        '{uuid:$uuid, status:$status}')"

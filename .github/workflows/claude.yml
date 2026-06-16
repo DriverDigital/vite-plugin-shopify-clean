@@ -1,0 +1,106 @@
+name: Claude Code
+
+# The implementer. claude-code-action runs the full Claude Code runtime inside a GitHub-hosted
+# runner: it reads the issue, writes code, and (driven by the prompt below) creates a
+# development-linked branch from the issue, pushes it, and OPENS A PULL REQUEST. Copy into a pilot
+# repo's .github/workflows/. It opens PRs and NEVER auto-merges; only users with write access can
+# trigger it.
+#
+# WHY THE EXPLICIT PROMPT (load-bearing): on the issue path, claude-code-action@v1 does NOT open a
+# PR by itself, and does NOT create a development-linked branch — by default it pushes a plain
+# branch and leaves a *prefilled PR-creation link* (action capabilities doc + open FR
+# anthropics/claude-code-action#894). A prefill link is not a `pull_request` event, so the status
+# sync would never advance past "In Progress". The `prompt:` below (issue events only) drives the
+# whole chain in one actor: create a DEVELOPMENT-LINKED branch from the issue (`gh issue develop`,
+# so issue<->branch<->PR are natively connected and visible from any node in the GitHub UI),
+# implement on it, push, then open a REAL PR (`gh pr create`). The PR is authored by the Claude App,
+# which is ALSO why its events cascade into bonsai-status-sync.yml (the default GITHUB_TOKEN would
+# not). bonsai-status-sync.yml then resolves the PR's linked issue via GitHub's native
+# `closingIssuesReferences` (a development link populates that on its own — empirically verified) and
+# reads the Bonsai task URL from the ISSUE body. So NOTHING depends on a task URL being copied into
+# the PR body. This branch+PR flow is model-driven (claude-code-action has no native dev-link / no
+# auto-PR), so CONFIRM at pilot validation (docs/phase2-github-setup.md step 5) that the chain forms:
+# issue -> dev-linked branch -> claude[bot] PR -> Internal Review. If the model won't drive it
+# reliably, the allow-list and the prompt are the tuning points (see claude_args below).
+#
+# TRIGGERS on `@claude` in: an issue body (the cron orchestrator opens issues and @claude's them to
+# start work), a standalone PR/issue comment, OR inside a PR review or an inline review comment (a
+# reviewer @claude's the PR to request revisions — the natural place to do it). A review-driven run
+# pushes new commits to the existing PR (synchronize -> Internal Review); it does NOT open a second
+# PR (the branch+PR prompt is gated to issue events).
+#
+# AUTH — subscription billing (Max plan), NOT pay-as-you-go:
+#   1. Run `claude setup-token` (as the Agents account) to mint an OAuth token.
+#   2. Store it as the repo/org secret CLAUDE_CODE_OAUTH_TOKEN.
+#   3. The `claude_code_oauth_token` input below consumes it.
+# PRECEDENCE TRAP: if an ANTHROPIC_API_KEY secret is also present in the env it WINS and bills at
+# API rates — keep it out of this workflow's env. (For team-owned, rotatable billing later, swap
+# to a Console API key via `anthropic_api_key` — see the commented line.)
+#
+# The Claude GitHub App must be installed on the repo: run `/install-github-app` from the Claude
+# Code CLI, or install github.com/apps/claude manually. The App identity is what creates the branch,
+# pushes, and opens the PR — which is ALSO why the PR events cascade into bonsai-status-sync.yml.
+
+on:
+  issue_comment:
+    types: [created]
+  issues:
+    # 'opened' only — the orchestrator kicks off work by putting @claude in the issue BODY at
+    # creation. 'assigned' is intentionally omitted: with the @claude-in-body guard it would
+    # re-launch a second implementer run whenever an already-@claude'd issue is (re)assigned.
+    types: [opened]
+  pull_request_review:
+    # a reviewer's @claude inside a submitted review (e.g. "Request changes") drives revisions
+    types: [submitted]
+  pull_request_review_comment:
+    # a reviewer's @claude on an inline diff comment drives revisions
+    types: [created]
+
+# Don't stack implementer runs on the same issue/PR. Review events carry pull_request.number (not
+# issue.number), so key on the PR number when present, else the issue number.
+concurrency:
+  group: claude-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  claude:
+    # Only run when @claude is actually present (and never on the bot's own comments). The four
+    # branches mirror the four subscribed events; a review with no body (e.g. a bare approve) has a
+    # null review.body, and contains(null, …) is false — so it correctly no-ops.
+    if: |
+      (github.event_name == 'issues' && contains(github.event.issue.body, '@claude')) ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # create the dev-linked branch + push commits
+      pull-requests: write  # open the PR
+      issues: write         # attach the development link to the issue
+      # REQUIRED, do not drop: the action fetches a GitHub OIDC token to mint the Claude GitHub App
+      # installation token — that `claude[bot]` identity is what creates the branch / opens the PR,
+      # which is what makes the PR events cascade into bonsai-status-sync.yml. Without this the
+      # action degrades to the default GITHUB_TOKEN identity and PR events do NOT cascade (status
+      # stalls at In Progress). (Matches the action's official examples/claude.yml + setup.md.)
+      id-token: write
+      actions: read   # lets Claude read CI results on the PR during the @claude revision loop
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: anthropics/claude-code-action@v1
+        with:
+          # Subscription billing (Max plan). Verified input key for claude-code-action@v1.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # API-key billing instead (team-owned / rotatable):
+          # anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # On an ISSUE trigger, drive the full chain (dev-linked branch -> implement -> push -> PR).
+          # Empty on every other trigger, so PR-revision runs keep claude-code-action's default
+          # "read the @claude comment, fix, push to the existing PR" behavior (fires synchronize ->
+          # Internal Review). format() injects the live issue number.
+          prompt: "${{ github.event_name == 'issues' && format('Implement the task described in this issue. Work entirely through these steps, in order: (1) create a development-linked branch FROM this issue by running `gh issue develop {0} --name claude/issue-{0} --checkout`, so the branch is natively linked to the issue in GitHub. (2) Make your code changes on that branch. (3) Commit and push the branch. (4) Open a REAL pull request from that branch to the repository default branch by running `gh pr create` with an explicit `--title` and `--body` (never the bare interactive form, which hangs in a CI runner with no TTY), and include `Closes #{0}` in the `--body`. Do NOT merely leave a prefilled PR-creation link. The native issue-branch link plus the Closes reference are how downstream automation connects the PR back to its Bonsai task — you do NOT need to copy any task URL into the PR. Do not invent acceptance criteria the issue does not state.', github.event.issue.number) || '' }}"
+          # Tools the issue-path flow needs, explicitly granted (an autonomous run only acts with
+          # allow-listed tools): file edits + the exact gh/git commands the prompt drives.
+          # PILOT-TUNING POINT: if the implementer can't edit / commit / branch / open the PR, widen
+          # this list (e.g. add build/test Bash, or more git/gh subcommands).
+          claude_args: "--max-turns 15 --allowedTools 'Edit,Write,Read,Glob,Grep,Bash(gh issue develop:*),Bash(git:*),Bash(gh pr create:*)'"
