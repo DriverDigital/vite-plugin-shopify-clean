@@ -99,8 +99,15 @@ jobs:
           # "read the @claude comment, fix, push to the existing PR" behavior (fires synchronize ->
           # Internal Review). format() injects the live issue number.
           prompt: "${{ github.event_name == 'issues' && format('Implement the task described in this issue. Work entirely through these steps, in order: (1) create a development-linked branch FROM this issue by running `gh issue develop {0} --name claude/issue-{0} --checkout`, so the branch is natively linked to the issue in GitHub. (2) Make your code changes on that branch. (3) Commit and push the branch. (4) Open a REAL pull request from that branch to the repository default branch by running `gh pr create` with an explicit `--title` and `--body` (never the bare interactive form, which hangs in a CI runner with no TTY), and include `Closes #{0}` in the `--body`. Do NOT merely leave a prefilled PR-creation link. The native issue-branch link plus the Closes reference are how downstream automation connects the PR back to its Bonsai task — you do NOT need to copy any task URL into the PR. Do not invent acceptance criteria the issue does not state.', github.event.issue.number) || '' }}"
-          # Tools the issue-path flow needs, explicitly granted (an autonomous run only acts with
-          # allow-listed tools): file edits + the exact gh/git commands the prompt drives.
-          # PILOT-TUNING POINT: if the implementer can't edit / commit / branch / open the PR, widen
-          # this list (e.g. add build/test Bash, or more git/gh subcommands).
-          claude_args: "--max-turns 15 --allowedTools 'Edit,Write,Read,Glob,Grep,Bash(gh issue develop:*),Bash(git:*),Bash(gh pr create:*)'"
+          # Tools the issue-path flow needs. The implementer is a coding agent in an EPHEMERAL runner
+          # that already holds the Claude App's contents/pull-requests write — so the meaningful
+          # security boundary is that token's scope (no admin, no auto-merge) + branch protection,
+          # NOT an in-runner Bash allow-list. A narrow Bash list just starves the model: it reaches
+          # for ordinary shell (ls/cat/find, build, test) and burns its whole turn budget on
+          # permission denials before it can open the PR. So: full Bash + turn headroom for the
+          # branch -> implement -> push -> PR sequence.
+          # TUNED AT PILOT 2026-06-16: the original 'gh issue develop / git / gh pr create'-only list
+          # produced 10 permission denials and capped out at --max-turns 15 (error_max_turns) before
+          # opening a PR. If you must tighten Bash later, allow-list at least the build/test/VCS
+          # commands the repo actually needs, and keep enough turns for exploration + the PR hop.
+          claude_args: "--max-turns 30 --allowedTools 'Edit,Write,Read,Glob,Grep,Bash'"
