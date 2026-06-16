@@ -1,5 +1,7 @@
 # @driver-digital/vite-plugin-shopify-clean
 
+> Maintained by Driver Digital.
+
 Vite plugin that cleans up your Shopify theme `assets/` folder across builds and during watch (HMR). It is designed to be used alongside Barrel's [Shopify Vite Plugin](https://shopify-vite.barrelny.com/).
 
 Why you might need this: when Vite emits hashed filenames (e.g., `app-abc123.js`), older hashed files can accumulate over time. This plugin removes outdated assets safely so your `assets/` directory stays tidy and your theme only references current files.
