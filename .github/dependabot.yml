@@ -8,7 +8,6 @@ updates:
   # Keep npm dependencies up to date
   - package-ecosystem: "npm"
     directory: "/"
-    target-branch: "develop"
     schedule:
       interval: "monthly"
     # Raise all npm pull requests with assignees
