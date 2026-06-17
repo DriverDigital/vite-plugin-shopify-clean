@@ -2,11 +2,14 @@
 
 Instructions for releasing a new version of @driver-digital/vite-plugin-shopify-clean to npm.
 
+Work is collected on `main` — feature and dependency PRs merge into `main`, and releases are cut directly from `main`. There is no separate `develop` integration branch.
+
 ## Prerequisites
 
-- You must be on the `develop` branch with a clean working tree
-- All changes intended for release must be committed to `develop`
-- CI must be passing on `develop`
+- You must be on the `main` branch with a clean working tree
+- `main` must be up to date with `origin/main` (`git pull`)
+- All changes intended for release must already be merged into `main`
+- CI must be passing on `main`
 
 ## Steps
 
@@ -61,12 +64,13 @@ This checks:
 
 ### 3. Analyze changes since last release
 
-Compare `develop` to `main` to understand what's being released:
+Compare the latest release tag to `main` to understand what's being released:
 
 ```bash
-git fetch origin
-git log origin/main..develop --oneline
-git diff origin/main..develop --stat
+git fetch origin --tags
+LAST_TAG=$(git describe --tags --abbrev=0)
+git log "$LAST_TAG"..main --oneline
+git diff "$LAST_TAG"..main --stat
 ```
 
 Review the commits and changed files to categorize the release.
@@ -84,7 +88,7 @@ Perform a thorough review of `README.md` against the actual implementation in `s
 - [ ] **File types**: README mentions all file types the plugin tracks (check `getFilesInManifest` for JS, CSS, assets, etc.)
 - [ ] **Cleanup mechanism**: README correctly describes how cleanup decisions are made (manifest comparison vs hash matching, etc.)
 
-**If any discrepancies are found**, update the README and commit to `develop` before proceeding with the version bump.
+**If any discrepancies are found**, update the README and commit to `main` before proceeding with the version bump.
 
 ### 5. Determine version bump type
 
@@ -98,7 +102,7 @@ Based on the changes, decide the version type:
 
 ### 6. Bump the version
 
-Run the appropriate npm version command on `develop`:
+Run the appropriate npm version command on `main`:
 
 ```bash
 npm version patch   # or minor, or major
@@ -125,22 +129,13 @@ git commit --amend --no-edit
 git tag -f vX.Y.Z   # Re-tag to include changelog in the tagged commit
 ```
 
-### 8. Push to develop
+### 8. Push to main
 
 ```bash
-git push origin develop --tags
-```
-
-### 9. Merge to main
-
-```bash
-git checkout main
-git pull origin main
-git merge develop
 git push origin main --tags
 ```
 
-### 10. Create GitHub Release (required before npm publish)
+### 9. Create GitHub Release (required before npm publish)
 
 **IMPORTANT: The GitHub Release must be created before publishing to npm.**
 
@@ -173,7 +168,7 @@ Go to https://github.com/DriverDigital/vite-plugin-shopify-clean/releases/new
 3. Copy release notes from CHANGELOG.md
 4. Click "Publish release"
 
-### 11. Publish to npm
+### 10. Publish to npm
 
 **STOP: The user must complete this step.**
 
