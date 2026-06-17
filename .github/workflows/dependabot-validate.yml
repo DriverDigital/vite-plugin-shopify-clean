@@ -21,6 +21,6 @@ concurrency:
 
 jobs:
   validate:
-    # Pinned to DriverDigital/workflows v1.0.0
-    uses: DriverDigital/workflows/.github/workflows/dependabot-validate.yml@f52a2d2d1051f9de178aad498e0691b3d9f09be8
+    # Pinned to DriverDigital/workflows v1.0.1
+    uses: DriverDigital/workflows/.github/workflows/dependabot-validate.yml@627c2ddbb2f4f2201c70c87f39a72bcacfbe585b
     # NO `secrets:` line — intentional and load-bearing. Do not add one.
