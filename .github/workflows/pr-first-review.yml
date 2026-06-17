@@ -1,0 +1,25 @@
+name: PR-first review
+
+# CALLER STUB — install into a pipeline repo's .github/workflows/.
+# Calls the central pr-first-review reusable on human, no-ticket PRs. Inherits
+# secrets (safe: fork PRs get none under `pull_request`, and the reusable also
+# guards to same-repo PRs).
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, reopened] # NOT synchronize — review once, re-trigger on demand
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: read
+
+concurrency:
+  group: pr-first-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # Pinned to DriverDigital/workflows v1.0.0
+    uses: DriverDigital/workflows/.github/workflows/pr-first-review.yml@f52a2d2d1051f9de178aad498e0691b3d9f09be8
+    secrets: inherit
