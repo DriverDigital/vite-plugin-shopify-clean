@@ -20,5 +20,8 @@ concurrency:
 
 jobs:
   review:
-    uses: DriverDigital/workflows/.github/workflows/pr-first-review.yml@bfcafe2fef3934263fbd7751c18b07453f3a798f # v1.0.2
+    # Only review real, published PRs — skip drafts (many repos open a draft PR first for build-test CI).
+    # `ready_for_review` (in the trigger list above) covers the draft→ready transition.
+    if: ${{ github.event.pull_request.draft == false }}
+    uses: DriverDigital/workflows/.github/workflows/pr-first-review.yml@9d0a595009ed88e737668e7a58a79891b842dfeb # v1.1.1
     secrets: inherit
