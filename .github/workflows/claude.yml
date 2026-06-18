@@ -64,14 +64,28 @@ concurrency:
 
 jobs:
   claude:
-    # Only run when @claude is actually present (and never on the bot's own comments). The four
-    # branches mirror the four subscribed events; a review with no body (e.g. a bare approve) has a
-    # null review.body, and contains(null, …) is false — so it correctly no-ops.
+    # Run only when @claude is present (never on the bot's own comments) AND the actor is trusted.
+    # The four branches mirror the four subscribed events; a review with no body (e.g. a bare
+    # approve) has a null review.body, and contains(null, …) is false — so it correctly no-ops.
+    # ACTOR GATE (defense-in-depth, officially recommended): this job holds contents/pull-requests/
+    # issues WRITE plus the Max-plan OAuth secret, so an untrusted actor (e.g. a random public-repo
+    # issue or comment) must not even start the runner. claude-code-action also refuses writes for
+    # non-write actors, but that only kicks in AFTER the job spins up; author_association fails fast
+    # before it. NOTE author_association is the actor's ORG RELATIONSHIP, not the token's scopes:
+    # OWNER/MEMBER/COLLABORATOR covers the human reviewers AND the cron orchestrator identity
+    # (driver-digital-agents is a DriverDigital org MEMBER — verified on its own issues — so it passes
+    # here even though its PAT deliberately carries NO code-write; the implementer's code-write comes
+    # from the separate Claude App token, not the orchestrator). Coarse on purpose: a read-only org
+    # member would also pass, but the action's own write check still stops them.
     if: |
-      (github.event_name == 'issues' && contains(github.event.issue.body, '@claude')) ||
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude'))
+      (github.event_name == 'issues' && contains(github.event.issue.body, '@claude') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)) ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.review.author_association)) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
     runs-on: ubuntu-latest
     permissions:
       contents: write       # create the dev-linked branch + push commits
@@ -85,10 +99,15 @@ jobs:
       id-token: write
       actions: read   # lets Claude read CI results on the PR during the @claude revision loop
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
-      - uses: anthropics/claude-code-action@v1
+          # claude-code-action mints its OWN GitHub App installation token (via id-token: write) for
+          # the branch / push / PR — it never uses the checkout-persisted GITHUB_TOKEN — so drop that
+          # credential from .git/config. (Verified safe with the push+PR flow; matches the
+          # persist-credentials:false used in the sibling reusable workflows.)
+          persist-credentials: false
+      - uses: anthropics/claude-code-action@806af32823ef69c8ef357086c573a902af641307 # v1
         with:
           # Subscription billing (Max plan). Verified input key for claude-code-action@v1.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
