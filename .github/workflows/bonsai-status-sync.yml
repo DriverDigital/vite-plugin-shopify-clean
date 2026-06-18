@@ -58,7 +58,12 @@ permissions:
   pull-requests: read
 
 # One status flip per ref at a time — a rapid push/review burst can't race conflicting writes
-# onto the same task through the single shared browser lock.
+# onto the same task through the single shared browser lock. Deliberately per-ref, NOT repo-wide:
+# with cancel-in-progress:false GitHub keeps only ONE pending run per group and cancels the prior
+# pending one, so a repo-wide group would let an unrelated task's flip silently cancel another's
+# during a burst. Cross-ref ordering (a late issue->In Progress landing after a PR->Internal Review)
+# is a narrow window — the issue event precedes the PR by the whole implementation time — and
+# self-heals: the next PR event re-flips. The backend browser lock serializes the actual writes.
 concurrency:
   group: bonsai-status-${{ github.event.pull_request.number || github.event.issue.number }}
   cancel-in-progress: false
@@ -91,9 +96,16 @@ jobs:
             # PR / review event: resolve the issue(s) this PR closes (the dev-link populates
             # closingIssuesReferences natively; a `Closes #N` would too) and grep the ISSUE body.
             # We never read the PR body for the URL — the issue link is the source of truth.
-            for n in $(gh pr view "$PR_NUMBER" --repo "$REPO" --json closingIssuesReferences \
-                         --jq '.closingIssuesReferences[].number' 2>/dev/null || true); do
-              ibody=$(gh issue view "$n" --repo "$REPO" --json body --jq '.body' 2>/dev/null || true)
+            # No `2>/dev/null || true` swallow: a real gh failure (auth / permission / rate-limit)
+            # must fail this step LOUDLY rather than silently no-op the status flip. Capturing into a
+            # var means set -e trips on a failed `gh` call (a `for x in $(...)` word-list would NOT).
+            # An empty closingIssuesReferences is a SUCCESS (exit 0, no output) -> the loop just runs
+            # zero times and we leave the task untouched. (grep keeps `|| true`: a uuid-less body is
+            # not an error.)
+            refs=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json closingIssuesReferences \
+                     --jq '.closingIssuesReferences[].number')
+            for n in $refs; do
+              ibody=$(gh issue view "$n" --repo "$REPO" --json body --jq '.body')
               TASK_UUID=$(printf '%s' "$ibody" | grep -oiE "$UUID_RE" | head -n1 | cut -d= -f2 || true)
               if [ -n "$TASK_UUID" ]; then break; fi
             done
@@ -136,6 +148,12 @@ jobs:
           # Override BONSAI_URL via a repo/org Actions VARIABLE if the tunnel host changes.
           BONSAI_URL: ${{ vars.BONSAI_URL || 'https://driver-bonsai-mcp.ngrok.app' }}
           BONSAI_TOKEN: ${{ secrets.BONSAI_BEARER_TOKEN }}
+          # Route step outputs through env — never interpolate ${{ }} straight into the run shell.
+          # These values are already constrained (uuid is hex, status is a fixed literal) so there's
+          # no live injection, but the env hop is injection-proof regardless and clears the static
+          # analysis flag.
+          TASK_UUID: ${{ steps.ctx.outputs.task_uuid }}
+          STATUS: ${{ steps.ctx.outputs.status }}
         run: |
           set -euo pipefail
           # --retry covers transient 5xx (the 503 BROWSER_BUSY lock-timeout, 502 blips). curl never
@@ -148,6 +166,6 @@ jobs:
           curl -fsS --retry 3 --retry-delay 30 --max-time 130 -X POST "$BONSAI_URL/tasks/update-status" \
             -H "Authorization: Bearer $BONSAI_TOKEN" \
             -H "Content-Type: application/json" \
-            -d "$(jq -n --arg uuid '${{ steps.ctx.outputs.task_uuid }}' \
-                        --arg status '${{ steps.ctx.outputs.status }}' \
+            -d "$(jq -n --arg uuid "$TASK_UUID" \
+                        --arg status "$STATUS" \
                         '{uuid:$uuid, status:$status}')"
