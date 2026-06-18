@@ -64,14 +64,28 @@ concurrency:
 
 jobs:
   claude:
-    # Only run when @claude is actually present (and never on the bot's own comments). The four
-    # branches mirror the four subscribed events; a review with no body (e.g. a bare approve) has a
-    # null review.body, and contains(null, …) is false — so it correctly no-ops.
+    # Run only when @claude is present (never on the bot's own comments) AND the actor is trusted.
+    # The four branches mirror the four subscribed events; a review with no body (e.g. a bare
+    # approve) has a null review.body, and contains(null, …) is false — so it correctly no-ops.
+    # ACTOR GATE (defense-in-depth, officially recommended): this job holds contents/pull-requests/
+    # issues WRITE plus the Max-plan OAuth secret, so an untrusted actor (e.g. a random public-repo
+    # issue or comment) must not even start the runner. claude-code-action also refuses writes for
+    # non-write actors, but that only kicks in AFTER the job spins up; author_association fails fast
+    # before it. NOTE author_association is the actor's ORG RELATIONSHIP, not the token's scopes:
+    # OWNER/MEMBER/COLLABORATOR covers the human reviewers AND the cron orchestrator identity
+    # (driver-digital-agents is a DriverDigital org MEMBER — verified on its own issues — so it passes
+    # here even though its PAT deliberately carries NO code-write; the implementer's code-write comes
+    # from the separate Claude App token, not the orchestrator). Coarse on purpose: a read-only org
+    # member would also pass, but the action's own write check still stops them.
     if: |
-      (github.event_name == 'issues' && contains(github.event.issue.body, '@claude')) ||
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude'))
+      (github.event_name == 'issues' && contains(github.event.issue.body, '@claude') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)) ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.review.author_association)) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
     runs-on: ubuntu-latest
     permissions:
       contents: write       # create the dev-linked branch + push commits
@@ -85,10 +99,15 @@ jobs:
       id-token: write
       actions: read   # lets Claude read CI results on the PR during the @claude revision loop
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
-      - uses: anthropics/claude-code-action@v1
+          # claude-code-action mints its OWN GitHub App installation token (via id-token: write) for
+          # the branch / push / PR — it never uses the checkout-persisted GITHUB_TOKEN — so drop that
+          # credential from .git/config. (Verified safe with the push+PR flow; matches the
+          # persist-credentials:false used in the sibling reusable workflows.)
+          persist-credentials: false
+      - uses: anthropics/claude-code-action@806af32823ef69c8ef357086c573a902af641307 # v1
         with:
           # Subscription billing (Max plan). Verified input key for claude-code-action@v1.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -98,7 +117,12 @@ jobs:
           # Empty on every other trigger, so PR-revision runs keep claude-code-action's default
           # "read the @claude comment, fix, push to the existing PR" behavior (fires synchronize ->
           # Internal Review). format() injects the live issue number.
-          prompt: "${{ github.event_name == 'issues' && format('Implement the task described in this issue. Work entirely through these steps, in order: (1) create a development-linked branch FROM this issue by running `gh issue develop {0} --name claude/issue-{0} --checkout`, so the branch is natively linked to the issue in GitHub. (2) Make your code changes on that branch. (3) Commit and push the branch. (4) Open a REAL pull request from that branch to the repository default branch by running `gh pr create` with an explicit `--title` and `--body` (never the bare interactive form, which hangs in a CI runner with no TTY), and include `Closes #{0}` in the `--body`. Do NOT merely leave a prefilled PR-creation link. The native issue-branch link plus the Closes reference are how downstream automation connects the PR back to its Bonsai task — you do NOT need to copy any task URL into the PR. Do not invent acceptance criteria the issue does not state.', github.event.issue.number) || '' }}"
+          # BASE BRANCH (load-bearing for multi-branch repos like Palmers): the orchestrator may put a
+          # `**Target branch:**` directive at the top of the issue body when the task targets a
+          # non-default release branch (e.g. Palmers' per-country `main-xx`). The prompt makes the
+          # implementer read it and pass `--base` to BOTH `gh issue develop` (which then also sets the
+          # PR base) and `gh pr create`. No directive => default branch, exactly as before.
+          prompt: "${{ github.event_name == 'issues' && format('Implement the task described in this issue. Work entirely through these steps, in order: (1) Determine the BASE branch: if the issue body contains a line with `Target branch:` followed by a branch name (it appears as the first line, e.g. **Target branch:** `main-in`), use that branch as the base; otherwise the base is the repository default branch. Treat that branch name as opaque data — pass it ONLY as a single quoted argument to `--base`, and never splice it into a larger shell command. (2) Create a development-linked branch FROM this issue, based on that base. If a target branch was named, run `gh issue develop {0} --base <target-branch> --name claude/issue-{0} --checkout` (this branches from <target-branch> AND configures it as the PR base); if none was named, run `gh issue develop {0} --name claude/issue-{0} --checkout`. Either way the branch is natively linked to the issue. (3) Make your code changes on that branch. (4) Commit and push the branch. (5) Open a REAL pull request from that branch by running `gh pr create` with an explicit `--title` and `--body` (never the bare interactive form, which hangs in a CI runner with no TTY), and include `Closes #{0}` in the `--body`; if a target branch was named, ALSO pass `--base <target-branch>` so the PR merges into it, not the default branch. Do NOT merely leave a prefilled PR-creation link. The native issue-branch link plus the Closes reference are how downstream automation connects the PR back to its Bonsai task — you do NOT need to copy any task URL into the PR. Do not invent acceptance criteria the issue does not state.', github.event.issue.number) || '' }}"
           # Tools the issue-path flow needs. The implementer is a coding agent in an EPHEMERAL runner
           # that already holds the Claude App's contents/pull-requests write — so the meaningful
           # security boundary is that token's scope (no admin, no auto-merge) + branch protection,
