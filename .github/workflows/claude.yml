@@ -141,4 +141,4 @@ jobs:
           # produced 10 permission denials and capped out at --max-turns 15 (error_max_turns) before
           # opening a PR. If you must tighten Bash later, allow-list at least the build/test/VCS
           # commands the repo actually needs, and keep enough turns for exploration + the PR hop.
-          claude_args: "--max-turns 30 --allowedTools 'Edit,Write,Read,Glob,Grep,Bash'"
+          claude_args: "--max-turns 75 --allowedTools 'Edit,Write,Read,Glob,Grep,Bash'"
