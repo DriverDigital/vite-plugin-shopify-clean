@@ -73,20 +73,23 @@ jobs:
     # non-write actors, but that only kicks in AFTER the job spins up; author_association fails fast
     # before it. NOTE author_association is the actor's ORG RELATIONSHIP, not the token's scopes:
     # OWNER/MEMBER/COLLABORATOR covers the human reviewers on the comment/review revision paths. The
-    # cron orchestrator (driver-digital-agents) is whitelisted by LOGIN on the issues path instead —
-    # NOT by author_association. A PAT can open an issue on a private repo WITHOUT holding the
+    # cron orchestrator (driver-digital-agents) is whitelisted by LOGIN + immutable account id
+    # (261291955) on the issues path instead — NOT by author_association. A PAT can open an issue on a private repo WITHOUT holding the
     # org-member relationship author_association checks for, so the orchestrator's webhook
     # author_association is NOT reliably OWNER/MEMBER/COLLABORATOR at event time. This silently
     # skipped the implementer on 2026-06-19 (issue created fine, but the job's gate evaluated false,
-    # so no branch and no PR — the bug this clause fixes). The login check makes the trusted
-    # orchestrator deterministic regardless of how GitHub computes its association; its PAT still
+    # so no branch and no PR — the bug this clause fixes). The login is paired with the IMMUTABLE
+    # numeric account id (261291955) — a bare login is mutable (a renamed/reclaimed account could
+    # otherwise inherit the whitelist; only exploitable on a PUBLIC repo, but cheap to close) and the
+    # id cannot be reassigned. Together they make the gate deterministic regardless of association; its PAT still
     # carries NO code-write, and the implementer's code-write comes from the separate Claude App
     # token. Coarse on purpose: a read-only org member would also pass, but the action's own write
     # check still stops them.
     if: |
       (github.event_name == 'issues' && contains(github.event.issue.body, '@claude') &&
         (contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association) ||
-         github.event.issue.user.login == 'driver-digital-agents')) ||
+         (github.event.issue.user.login == 'driver-digital-agents' &&
+          github.event.issue.user.id == 261291955))) ||
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude') &&
         contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
       (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude') &&
