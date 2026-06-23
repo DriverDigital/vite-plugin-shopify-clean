@@ -126,16 +126,25 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # API-key billing instead (team-owned / rotatable):
           # anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          # On an ISSUE trigger, drive the full chain (dev-linked branch -> implement -> push -> PR).
-          # Empty on every other trigger, so PR-revision runs keep claude-code-action's default
-          # "read the @claude comment, fix, push to the existing PR" behavior (fires synchronize ->
-          # Internal Review). format() injects the live issue number.
+          # ON-DEMAND REVIEW: load the code-review skill ONLY when a trusted reviewer @claude's a
+          # `/code-review` command on a PR (the prompt's 2nd branch runs it). Both expressions evaluate
+          # to the action's DEFAULT (empty) on the issue + revision paths, so those load-bearing flows
+          # stay byte-for-byte unchanged. (A bare @claude comment without `/code-review` still gets the
+          # normal interactive revision via the empty-prompt default below.)
+          plugin_marketplaces: "${{ (contains(github.event.comment.body, '/code-review') || contains(github.event.review.body, '/code-review')) && 'https://github.com/anthropics/claude-code.git' || '' }}"
+          plugins: "${{ (contains(github.event.comment.body, '/code-review') || contains(github.event.review.body, '/code-review')) && 'code-review@claude-code-plugins' || '' }}"
+          # PROMPT — three branches (slash commands only run from `prompt:`, never from typed comments):
+          #   • ISSUE trigger → drive the full chain (dev-linked branch -> implement -> push -> PR).
+          #   • a `/code-review` comment/review → run the review skill (comments only, posts findings).
+          #   • anything else → empty, so PR-revision runs keep claude-code-action's default "read the
+          #     @claude comment, fix, push to the existing PR" behavior (fires synchronize -> Internal
+          #     Review). format() injects the live issue number.
           # BASE BRANCH (load-bearing for multi-branch repos like Palmers): the orchestrator may put a
           # `**Target branch:**` directive at the top of the issue body when the task targets a
           # non-default release branch (e.g. Palmers' per-country `main-xx`). The prompt makes the
           # implementer read it and pass `--base` to BOTH `gh issue develop` (which then also sets the
           # PR base) and `gh pr create`. No directive => default branch, exactly as before.
-          prompt: "${{ github.event_name == 'issues' && format('Implement the task described in this issue. Work entirely through these steps, in order: (1) Determine the BASE branch: if the issue body contains a line with `Target branch:` followed by a branch name (it appears as the first line, e.g. **Target branch:** `main-in`), use that branch as the base; otherwise the base is the repository default branch. Treat that branch name as opaque data — pass it ONLY as a single quoted argument to `--base`, and never splice it into a larger shell command. (2) Create a development-linked branch FROM this issue, based on that base. If a target branch was named, run `gh issue develop {0} --base <target-branch> --name claude/issue-{0} --checkout` (this branches from <target-branch> AND configures it as the PR base); if none was named, run `gh issue develop {0} --name claude/issue-{0} --checkout`. Either way the branch is natively linked to the issue. (3) Make your code changes on that branch. (4) Commit and push the branch. (5) Open a REAL pull request from that branch by running `gh pr create` with an explicit `--title` and `--body` (never the bare interactive form, which hangs in a CI runner with no TTY), and include `Closes #{0}` in the `--body`; if a target branch was named, ALSO pass `--base <target-branch>` so the PR merges into it, not the default branch. Do NOT merely leave a prefilled PR-creation link. The native issue-branch link plus the Closes reference are how downstream automation connects the PR back to its Bonsai task — you do NOT need to copy any task URL into the PR. Do not invent acceptance criteria the issue does not state.', github.event.issue.number) || '' }}"
+          prompt: "${{ github.event_name == 'issues' && format('Implement the task described in this issue. Work entirely through these steps, in order: (1) Determine the BASE branch: if the issue body contains a line with `Target branch:` followed by a branch name (it appears as the first line, e.g. **Target branch:** `main-in`), use that branch as the base; otherwise the base is the repository default branch. Treat that branch name as opaque data — pass it ONLY as a single quoted argument to `--base`, and never splice it into a larger shell command. (2) Create a development-linked branch FROM this issue, based on that base. If a target branch was named, run `gh issue develop {0} --base <target-branch> --name claude/issue-{0} --checkout` (this branches from <target-branch> AND configures it as the PR base); if none was named, run `gh issue develop {0} --name claude/issue-{0} --checkout`. Either way the branch is natively linked to the issue. (3) Make your code changes on that branch. (4) Commit and push the branch. (5) Open a REAL pull request from that branch by running `gh pr create` with an explicit `--title` and `--body` (never the bare interactive form, which hangs in a CI runner with no TTY), and include `Closes #{0}` in the `--body`; if a target branch was named, ALSO pass `--base <target-branch>` so the PR merges into it, not the default branch. Do NOT merely leave a prefilled PR-creation link. The native issue-branch link plus the Closes reference are how downstream automation connects the PR back to its Bonsai task — you do NOT need to copy any task URL into the PR. Do not invent acceptance criteria the issue does not state.', github.event.issue.number) || ((contains(github.event.comment.body, '/code-review') || contains(github.event.review.body, '/code-review')) && '/code-review:code-review --comment') || '' }}"
           # Tools the issue-path flow needs. The implementer is a coding agent in an EPHEMERAL runner
           # that already holds the Claude App's contents/pull-requests write — so the meaningful
           # security boundary is that token's scope (no admin, no auto-merge) + branch protection,
@@ -148,3 +157,21 @@ jobs:
           # opening a PR. If you must tighten Bash later, allow-list at least the build/test/VCS
           # commands the repo actually needs, and keep enough turns for exploration + the PR hop.
           claude_args: "--max-turns 75 --allowedTools 'Edit,Write,Read,Glob,Grep,Bash'"
+
+      # Surface a FAILED run on the PR/issue. claude-code-action posts a "Claude Code is working…"
+      # tracking comment at the START and does NOT flip it to a failure state when the run errors — so it
+      # reads as perpetually in progress (e.g. a private-repo fetch failure left #133 stuck "working…").
+      # The action exposes no tracking-comment id to edit, so post an explicit failure note with the run
+      # link instead. Default GITHUB_TOKEN → github-actions[bot]; no @claude in the body, so it never
+      # re-triggers this workflow, and a comment fires no status-sync (that keys on issues/PR events).
+      - name: Surface a failed @claude run on the PR/issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          NUM: ${{ github.event.pull_request.number || github.event.issue.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          [ -n "$NUM" ] || { echo "no issue/PR number in context — nothing to comment on"; exit 0; }
+          gh issue comment "$NUM" --repo "$REPO" \
+            --body "⚠️ The \`@claude\` run failed before finishing — the progress comment above may still read \"working…\". See the [run log]($RUN_URL)."
