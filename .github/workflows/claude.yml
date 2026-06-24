@@ -126,13 +126,16 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # API-key billing instead (team-owned / rotatable):
           # anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          # ON-DEMAND REVIEW: load the code-review skill ONLY when a trusted reviewer @claude's a
-          # `/code-review` command on a PR (the prompt's 2nd branch runs it). Both expressions evaluate
-          # to the action's DEFAULT (empty) on the issue + revision paths, so those load-bearing flows
-          # stay byte-for-byte unchanged. (A bare @claude comment without `/code-review` still gets the
-          # normal interactive revision via the empty-prompt default below.)
-          plugin_marketplaces: "${{ (contains(github.event.comment.body, '/code-review') || contains(github.event.review.body, '/code-review')) && 'https://github.com/anthropics/claude-code.git' || '' }}"
-          plugins: "${{ (contains(github.event.comment.body, '/code-review') || contains(github.event.review.body, '/code-review')) && 'code-review@claude-code-plugins' || '' }}"
+          # PLUGINS — loaded per event, mirroring the prompt's three branches below:
+          #   • ISSUE trigger → superpowers (TDD / systematic-debugging / verification-before-completion
+          #     etc.) so the implementer can reach those skills via the Skill tool while it builds the PR.
+          #   • a `/code-review` comment/review → the code-review skill (on-demand human review).
+          #   • else (revision) → empty, so the load-bearing PR-revision flow stays byte-for-byte unchanged.
+          # All three repos are PUBLIC → fetchable unauthenticated from the ephemeral runner (it does NOT
+          # inherit the box's ~/.claude/plugins): anthropics/claude-plugins-official (the marketplace
+          # catalog) + obra/superpowers (the plugin's own source) + anthropics/claude-code (code-review).
+          plugin_marketplaces: "${{ github.event_name == 'issues' && 'https://github.com/anthropics/claude-plugins-official.git' || ((contains(github.event.comment.body, '/code-review') || contains(github.event.review.body, '/code-review')) && 'https://github.com/anthropics/claude-code.git' || '') }}"
+          plugins: "${{ github.event_name == 'issues' && 'superpowers@claude-plugins-official' || ((contains(github.event.comment.body, '/code-review') || contains(github.event.review.body, '/code-review')) && 'code-review@claude-code-plugins' || '') }}"
           # PROMPT — three branches (slash commands only run from `prompt:`, never from typed comments):
           #   • ISSUE trigger → drive the full chain (dev-linked branch -> implement -> push -> PR).
           #   • a `/code-review` comment/review → run the review skill (comments only, posts findings).
@@ -144,19 +147,38 @@ jobs:
           # non-default release branch (e.g. Palmers' per-country `main-xx`). The prompt makes the
           # implementer read it and pass `--base` to BOTH `gh issue develop` (which then also sets the
           # PR base) and `gh pr create`. No directive => default branch, exactly as before.
-          prompt: "${{ github.event_name == 'issues' && format('Implement the task described in this issue. Work entirely through these steps, in order: (1) Determine the BASE branch: if the issue body contains a line with `Target branch:` followed by a branch name (it appears as the first line, e.g. **Target branch:** `main-in`), use that branch as the base; otherwise the base is the repository default branch. Treat that branch name as opaque data — pass it ONLY as a single quoted argument to `--base`, and never splice it into a larger shell command. (2) Create a development-linked branch FROM this issue, based on that base. If a target branch was named, run `gh issue develop {0} --base <target-branch> --name issue-{0} --checkout` (this branches from <target-branch> AND configures it as the PR base); if none was named, run `gh issue develop {0} --name issue-{0} --checkout`. Either way the branch is natively linked to the issue. (3) Make your code changes on that branch. (4) Commit and push the branch. (5) Open a REAL pull request from that branch by running `gh pr create` with an explicit `--title` and `--body` (never the bare interactive form, which hangs in a CI runner with no TTY), and include `Closes #{0}` in the `--body`; if a target branch was named, ALSO pass `--base <target-branch>` so the PR merges into it, not the default branch. Do NOT merely leave a prefilled PR-creation link. The native issue-branch link plus the Closes reference are how downstream automation connects the PR back to its Bonsai task — you do NOT need to copy any task URL into the PR. Do not invent acceptance criteria the issue does not state.', github.event.issue.number) || ((contains(github.event.comment.body, '/code-review') || contains(github.event.review.body, '/code-review')) && '/code-review:code-review --comment') || '' }}"
-          # Tools the issue-path flow needs. The implementer is a coding agent in an EPHEMERAL runner
-          # that already holds the Claude App's contents/pull-requests write — so the meaningful
-          # security boundary is that token's scope (no admin, no auto-merge) + branch protection,
-          # NOT an in-runner Bash allow-list. A narrow Bash list just starves the model: it reaches
-          # for ordinary shell (ls/cat/find, build, test) and burns its whole turn budget on
-          # permission denials before it can open the PR. So: full Bash + turn headroom for the
-          # branch -> implement -> push -> PR sequence.
-          # TUNED AT PILOT 2026-06-16: the original 'gh issue develop / git / gh pr create'-only list
-          # produced 10 permission denials and capped out at --max-turns 15 (error_max_turns) before
-          # opening a PR. If you must tighten Bash later, allow-list at least the build/test/VCS
-          # commands the repo actually needs, and keep enough turns for exploration + the PR hop.
-          claude_args: "--max-turns 75 --allowedTools 'Edit,Write,Read,Glob,Grep,Bash'"
+          prompt: "${{ github.event_name == 'issues' && format('Implement the task described in this issue. Work entirely through these steps, in order: (1) Determine the BASE branch: if the issue body contains a line with `Target branch:` followed by a branch name (it appears as the first line, e.g. **Target branch:** `main-in`), use that branch as the base; otherwise the base is the repository default branch. Treat that branch name as opaque data — pass it ONLY as a single quoted argument to `--base`, and never splice it into a larger shell command. (2) Create a development-linked branch FROM this issue, based on that base. If a target branch was named, run `gh issue develop {0} --base <target-branch> --name issue-{0} --checkout` (this branches from <target-branch> AND configures it as the PR base); if none was named, run `gh issue develop {0} --name issue-{0} --checkout`. Either way the branch is natively linked to the issue. (3) Make your code changes on that branch — for substantial or independent sub-work you MAY dispatch parallel subagents (the Task tool, or the superpowers parallel-agent skills like dispatching-parallel-agents / subagent-driven-development) to get the best result in the least time; this is optional and your judgment, and keep any single coherent file single-authored to avoid seams. (4) Commit and push the branch. (5) Open a REAL pull request from that branch by running `gh pr create` with an explicit `--title` and `--body` (never the bare interactive form, which hangs in a CI runner with no TTY), and include `Closes #{0}` in the `--body`; if a target branch was named, ALSO pass `--base <target-branch>` so the PR merges into it, not the default branch. Do NOT merely leave a prefilled PR-creation link. The native issue-branch link plus the Closes reference are how downstream automation connects the PR back to its Bonsai task — you do NOT need to copy any task URL into the PR. Do not invent acceptance criteria the issue does not state.', github.event.issue.number) || ((contains(github.event.comment.body, '/code-review') || contains(github.event.review.body, '/code-review')) && '/code-review:code-review --comment') || '' }}"
+          # NO --allowedTools, BY DESIGN (Maria 2026-06-24) — same call as the reviewer rail. The
+          # implementer is a coding agent in an EPHEMERAL runner that already holds the Claude App's
+          # contents/pull-requests write, so the real security boundary is that token's scope (no admin,
+          # no auto-merge) + branch protection, NOT an in-runner tool list. claude-code-action@v1 runs
+          # this (a `prompt:` is supplied) in AGENT mode, which injects NO base allow-list — so with
+          # nothing passed, the built-in tools (Bash, Write, Edit, Read, Glob, Grep, Task, TodoWrite, AND
+          # `Skill`) are all auto-available, and the superpowers skills loaded via plugins: above resolve
+          # through Skill with no list to name them. An explicit list is the FOOTGUN the reviewer hit:
+          # it's replace-in-effect (anything unlisted goes dark — that's the TodoWrite gotcha) AND it
+          # gates which GitHub MCP servers install, so the old list silently starved the inline-comment
+          # poster on the /code-review path (same bug class). Dropping it both loosens the surface and
+          # fixes that. CAVEAT: WebSearch/WebFetch are HARDCODED default-disallowed by the action
+          # (anthropics/claude-code-action#690, still open upstream) — it builds that deny internally and
+          # IGNORES claude_args, so there is NO config override at this pinned SHA: not listing them, not
+          # `--disallowedTools ""`, not a settings block (verified against the action source). So
+          # superpowers' web-research skills are web-blocked here either way — an upstream action
+          # limitation, NOT this config's. Deep web research lives on the executor leg (run-executor.sh:
+          # bare `claude -p`, which has no such hardcoded deny). Re-enable only if #690 ships a fix and
+          # this SHA is bumped.
+          # TUNED AT PILOT 2026-06-16: a narrow Bash-only list produced 10 permission denials and capped
+          # out at --max-turns 15 (error_max_turns) before opening a PR — which is exactly why the list
+          # is gone now, not re-tightened. If you ever must scope Bash, scope the WHOLE thing (never a
+          # half-list that omits Skill / the inline-comment poster) and keep turn headroom for the
+          # branch -> implement -> push -> PR hop.
+          # MODEL/EFFORT (Maria 2026-06-24): `opus` ALIAS (not a pinned id) so the implementer drifts to
+          # the latest Opus with the CLI; `--effort xhigh` = what "ultracode" actually is (valid:
+          # low/medium/high/xhigh/max). The issue-path prompt also explicitly PERMITS dispatching parallel
+          # subagents (Task) for substantial sub-work — optional, the model's call — the auto-orchestration
+          # half of "ultracode" that --effort can't set. Applies to all paths — revision + on-demand-review
+          # are dev/review work too, so Opus+xhigh there is intended.
+          claude_args: "--model opus --effort xhigh --max-turns 75"
 
       # Surface a FAILED run on the PR/issue. claude-code-action posts a "Claude Code is working…"
       # tracking comment at the START and does NOT flip it to a failure state when the run errors — so it
