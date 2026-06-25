@@ -5,6 +5,7 @@ import { Manifest, Plugin } from 'vite'
 
 import { resolveOptions, VitePluginShopifyCleanOptions } from './options'
 
+/** Type guard: narrows an unknown thrown value to a Node.js system error (one carrying a `code`). */
 function isNodeError (err: unknown): err is NodeJS.ErrnoException {
   return err instanceof Error && 'code' in err
 }
