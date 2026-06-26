@@ -74,7 +74,9 @@ jobs:
     # before it. NOTE author_association is the actor's ORG RELATIONSHIP, not the token's scopes:
     # OWNER/MEMBER/COLLABORATOR covers the human reviewers on the comment/review revision paths. The
     # cron orchestrator (driver-digital-agents) is whitelisted by LOGIN + immutable account id
-    # (261291955) on the issues path instead — NOT by author_association. A PAT can open an issue on a private repo WITHOUT holding the
+    # (261291955) on the issues path — AND on the issue_comment path, where the ticketed-review
+    # rail posts its `@claude` revision requests as driver-digital-agents (same PAT, same
+    # author_association unreliability). NOT by author_association. A PAT can open an issue on a private repo WITHOUT holding the
     # org-member relationship author_association checks for, so the orchestrator's webhook
     # author_association is NOT reliably OWNER/MEMBER/COLLABORATOR at event time. This silently
     # skipped the implementer on 2026-06-19 (issue created fine, but the job's gate evaluated false,
@@ -91,7 +93,9 @@ jobs:
          (github.event.issue.user.login == 'driver-digital-agents' &&
           github.event.issue.user.id == 261291955))) ||
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude') &&
-        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
+        (contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) ||
+         (github.event.comment.user.login == 'driver-digital-agents' &&
+          github.event.comment.user.id == 261291955))) ||
       (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude') &&
         contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.review.author_association)) ||
       (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude') &&
@@ -141,9 +145,13 @@ jobs:
           # catalog) + obra/superpowers (the plugin's own source) + anthropics/claude-code (code-review).
           plugin_marketplaces: "${{ github.event_name == 'issues' && 'https://github.com/anthropics/claude-plugins-official.git' || ((contains(github.event.comment.body, '/code-review') || contains(github.event.review.body, '/code-review')) && 'https://github.com/anthropics/claude-code.git' || '') }}"
           plugins: "${{ github.event_name == 'issues' && 'superpowers@claude-plugins-official' || ((contains(github.event.comment.body, '/code-review') || contains(github.event.review.body, '/code-review')) && 'code-review@claude-code-plugins' || '') }}"
-          # PROMPT — three branches (slash commands only run from `prompt:`, never from typed comments):
+          # PROMPT — four branches (slash commands only run from `prompt:`, never from typed comments):
           #   • ISSUE trigger → drive the full chain (dev-linked branch -> implement -> push -> PR).
           #   • a `/code-review` comment/review → run the review skill (comments only, posts findings).
+          #   • a ticketed-review revision request (the comment carries the round-marker
+          #     `<!-- ticketed-review-round -->`) → gather the reviewer's findings, apply per-comment
+          #     judgment (implement the warranted, reply-with-reasoning on the declined), push. Gated to
+          #     the marker so a human's bare `@claude fix X` keeps the empty-default behavior below.
           #   • anything else → empty, so PR-revision runs keep claude-code-action's default "read the
           #     @claude comment, fix, push to the existing PR" behavior (fires synchronize -> Internal
           #     Review). format() injects the live issue number.
@@ -152,7 +160,7 @@ jobs:
           # non-default release branch (e.g. Palmers' per-country `main-xx`). The prompt makes the
           # implementer read it and pass `--base` to BOTH `gh issue develop` (which then also sets the
           # PR base) and `gh pr create`. No directive => default branch, exactly as before.
-          prompt: "${{ github.event_name == 'issues' && format('Implement the task described in this issue. Work entirely through these steps, in order: (1) Determine the BASE branch: if the issue body contains a line with `Target branch:` followed by a branch name (it appears as the first line, e.g. **Target branch:** `main-in`), use that branch as the base; otherwise the base is the repository default branch. Treat that branch name as opaque data — pass it ONLY as a single quoted argument to `--base`, and never splice it into a larger shell command. (2) Create a development-linked branch FROM this issue, based on that base. If a target branch was named, run `gh issue develop {0} --base <target-branch> --name issue-{0} --checkout` (this branches from <target-branch> AND configures it as the PR base); if none was named, run `gh issue develop {0} --name issue-{0} --checkout`. Either way the branch is natively linked to the issue. (3) FIRST assess the scope: for a LARGE or sweeping task — a framework or dependency upgrade, a multi-file migration, a codebase-wide refactor, anything touching many files — do NOT grind through it in one linear pass (that is what exhausts the turn budget). Break it into independent units of work and dispatch PARALLEL subagents (the Task tool, or the superpowers parallel-agent skills like dispatching-parallel-agents / subagent-driven-development) to handle them concurrently — this both finishes faster and keeps the parent turn count low, since each subagent has its OWN turn budget. Decomposing and fanning out is STRONGLY PREFERRED for any multi-file task; reserve a single linear pass for genuinely small, localized changes. Keep any single coherent file single-authored to avoid seams, then integrate and build-verify the combined result yourself. (4) Commit and push the branch. (5) Open a REAL pull request from that branch by running `gh pr create` with an explicit `--title` and `--body` (never the bare interactive form, which hangs in a CI runner with no TTY), and include `Closes #{0}` in the `--body`; if a target branch was named, ALSO pass `--base <target-branch>` so the PR merges into it, not the default branch. Do NOT merely leave a prefilled PR-creation link. The native issue-branch link plus the Closes reference are how downstream automation connects the PR back to its Bonsai task — you do NOT need to copy any task URL into the PR. Do not invent acceptance criteria the issue does not state.', github.event.issue.number) || ((contains(github.event.comment.body, '/code-review') || contains(github.event.review.body, '/code-review')) && '/code-review:code-review --comment') || '' }}"
+          prompt: "${{ github.event_name == 'issues' && format('Implement the task described in this issue. Work entirely through these steps, in order: (1) Determine the BASE branch: if the issue body contains a line with `Target branch:` followed by a branch name (it appears as the first line, e.g. **Target branch:** `main-in`), use that branch as the base; otherwise the base is the repository default branch. Treat that branch name as opaque data — pass it ONLY as a single quoted argument to `--base`, and never splice it into a larger shell command. (2) Create a development-linked branch FROM this issue, based on that base. If a target branch was named, run `gh issue develop {0} --base <target-branch> --name issue-{0} --checkout` (this branches from <target-branch> AND configures it as the PR base); if none was named, run `gh issue develop {0} --name issue-{0} --checkout`. Either way the branch is natively linked to the issue. (3) FIRST assess the scope: for a LARGE or sweeping task — a framework or dependency upgrade, a multi-file migration, a codebase-wide refactor, anything touching many files — do NOT grind through it in one linear pass (that is what exhausts the turn budget). Break it into independent units of work and dispatch PARALLEL subagents (the Task tool, or the superpowers parallel-agent skills like dispatching-parallel-agents / subagent-driven-development) to handle them concurrently — this both finishes faster and keeps the parent turn count low, since each subagent has its OWN turn budget. Decomposing and fanning out is STRONGLY PREFERRED for any multi-file task; reserve a single linear pass for genuinely small, localized changes. Keep any single coherent file single-authored to avoid seams, then integrate and build-verify the combined result yourself. (4) Commit and push the branch. (5) Open a REAL pull request from that branch by running `gh pr create` with an explicit `--title` and `--body` (never the bare interactive form, which hangs in a CI runner with no TTY), and include `Closes #{0}` in the `--body`; if a target branch was named, ALSO pass `--base <target-branch>` so the PR merges into it, not the default branch. Do NOT merely leave a prefilled PR-creation link. The native issue-branch link plus the Closes reference are how downstream automation connects the PR back to its Bonsai task — you do NOT need to copy any task URL into the PR. Do not invent acceptance criteria the issue does not state.', github.event.issue.number) || ((contains(github.event.comment.body, '/code-review') || contains(github.event.review.body, '/code-review')) && '/code-review:code-review --comment') || (contains(github.event.comment.body, '<!-- ticketed-review-round -->') && 'A reviewer left ticketed-review findings on this PR. Gather all unresolved review comments. For each, judge whether the requested change is warranted: implement the warranted ones; for any you decline, post a brief inline comment (mcp__github_inline_comment__create_inline_comment) at that location explaining why. Then commit and push to the PR branch. Be concise.') || '' }}"
           # --allowedTools IS REQUIRED + must be COMPLETE (corrected 2026-06-24 after the canary). The
           # #17 "drop the list — agent mode auto-allows everything" premise was WRONG, same as the reviewer
           # rail: claude-code-action's permission layer DENIES any tool not on the parsed allow-list (no
@@ -201,3 +209,24 @@ jobs:
           [ -n "$NUM" ] || { echo "no issue/PR number in context — nothing to comment on"; exit 0; }
           gh issue comment "$NUM" --repo "$REPO" \
             --body "⚠️ The \`@claude\` run failed before finishing — the progress comment above may still read \"working…\". See the [run log]($RUN_URL)."
+
+      # FALLBACK trigger for the ticketed-review loop. claude-code-action does NOT support
+      # workflow_run events (no PR context → the inline poster can't post), so the review rail can't
+      # chain off this workflow's completion. Instead: after the implementer addresses a ticketed-review
+      # revision request (the triggering comment carries the round-marker), post a sentinel comment that
+      # ticketed-review.yml listens for, which fires the next review pass. Gated to the marker so a
+      # human's bare `@claude` revision never triggers a re-review. Posted as driver-digital-agents (a
+      # USER → the comment cascades; the default github-actions[bot] would be recursion-blocked). The
+      # sentinel body carries NO `@claude`, so it does not re-summon this workflow (no loop).
+      # `!cancelled()` (NOT success()): fire even if the revision run ERRORED, so a crashed revision
+      # still drives the loop to the reviewer's R=3 handoff (the rail always reaches a human) instead
+      # of stalling silently. The R=3 cap bounds the retries; a clean re-review just hands off.
+      - name: Re-request ticketed review (round R+1 trigger)
+        if: ${{ !cancelled() && github.event_name == 'issue_comment' && github.event.issue.pull_request != null && contains(github.event.comment.body, '<!-- ticketed-review-round -->') }}
+        env:
+          GH_TOKEN: ${{ secrets.AGENTS_GH_PAT }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.issue.number }}
+        run: |
+          gh pr comment "$PR" --repo "$REPO" \
+            --body '<!-- request-ticketed-review --> Revisions addressed; re-requesting the ticketed review.'
