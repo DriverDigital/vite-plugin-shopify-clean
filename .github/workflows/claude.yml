@@ -129,8 +129,37 @@ jobs:
           # @claude PR-revision run on our private repos. The action then UNSETS this header itself and
           # pushes with the minted App token, so the claude[bot] identity (and the status-sync cascade) is
           # preserved — verified against the action's git-config.ts and the official examples/claude.yml.
-      - uses: anthropics/claude-code-action@806af32823ef69c8ef357086c573a902af641307 # v1
+      # Install Claude Code ourselves (latest STABLE channel), then hand it to the action below via
+      # path_to_claude_code_executable (which makes the action SKIP its own install). Two reasons:
+      #   1. UNPINNED CLI: each action release bakes in a PINNED Claude Code version (v1.0.161 installs
+      #      2.1.197). We'd rather track the current CLI without bumping the action just to move it
+      #      forward — `install.sh` with no version arg installs the latest STABLE build (auto-advances,
+      #      never pinned; not the more bleeding-edge `latest` channel). The action SHA is still bumped
+      #      periodically (Dependabot) so its bundled Agent SDK stays close to the CLI it drives.
+      #   2. RESILIENT INSTALL: the action's own install retries ONCE, no backoff, and does NOT fail the
+      #      job when the download fails — it proceeds and the SDK throws a misleading "native binary not
+      #      found". A transient `curl (35) Recv failure: Connection reset by peer` fetching the binary
+      #      killed an @claude run exactly this way (Avara PR #143, 2026-07-01). This loop retries 5x with
+      #      backoff and fails LOUDLY if the binary is still missing, so a real outage is an honest red
+      #      job — not a confusing SDK error with the tracking comment stuck on "working…".
+      # The action SHA stays PINNED (supply-chain safety); only the CLI binary floats (to current stable).
+      # Path is fixed because runs-on is ubuntu-latest (GitHub-hosted) → $HOME is always /home/runner.
+      - name: Install Claude Code (latest stable, resilient)
+        run: |
+          set +e
+          for i in 1 2 3 4 5; do
+            curl -fsSL https://claude.ai/install.sh | bash
+            [ -x "$HOME/.local/bin/claude" ] && break
+            echo "Claude Code install attempt $i failed; retrying in $((i * 3))s"
+            [ "$i" -lt 5 ] && sleep "$((i * 3))"
+          done
+          set -e
+          [ -x "$HOME/.local/bin/claude" ] || { echo "::error::Claude Code install failed after 5 attempts"; exit 1; }
+          "$HOME/.local/bin/claude" --version
+      - uses: anthropics/claude-code-action@fad22eb3fa582b7357fc0ea48af6645851b884fd # v1.0.161
         with:
+          # Use the latest CLI we installed above; skips the action's own pinned-version install.
+          path_to_claude_code_executable: /home/runner/.local/bin/claude
           # Subscription billing (Max plan). Verified input key for claude-code-action@v1.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # API-key billing instead (team-owned / rotatable):
