@@ -18,6 +18,16 @@ concurrency:
   group: ticketed-review-${{ github.event.pull_request.number || github.event.issue.number }}
   cancel-in-progress: false
 
+# Least-privilege token for the reusable's GitHub ops — declared explicitly here, NOT inherited.
+# Without this block a repo whose default workflow-token permission is "read" caps pull-requests and
+# issues at none, so the reusable's `pull-requests: write` request exceeds the ceiling and the whole
+# run fails workflow validation → a SILENT startup_failure (no check run, no notification). Mirrors
+# pr-first-review.yml, which has always carried it.
+permissions:
+  contents: read
+  pull-requests: write
+  issues: read
+
 jobs:
   review:
     # round 1: a claude[bot] PR; OR the re-review sentinel — which is posted ONLY by
