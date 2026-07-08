@@ -118,7 +118,7 @@ jobs:
       id-token: write
       actions: read   # lets Claude read CI results on the PR during the @claude revision loop
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
           # Keep the DEFAULT persist-credentials — do NOT set it to false. On the @claude-on-a-PR
@@ -156,7 +156,7 @@ jobs:
           set -e
           [ -x "$HOME/.local/bin/claude" ] || { echo "::error::Claude Code install failed after 5 attempts"; exit 1; }
           "$HOME/.local/bin/claude" --version
-      - uses: anthropics/claude-code-action@fad22eb3fa582b7357fc0ea48af6645851b884fd # v1.0.161
+      - uses: anthropics/claude-code-action@6c0083bb7289c31716797a039b6367b3079cc46e # v1.0.162
         with:
           # Use the latest CLI we installed above; skips the action's own pinned-version install.
           path_to_claude_code_executable: /home/runner/.local/bin/claude
