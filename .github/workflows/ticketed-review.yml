@@ -1,0 +1,49 @@
+# Per-repo caller for the ticketed-rail auto-review loop. claude-code-action cannot chain off
+# workflow_run (no PR context → the inline poster can't post), so this fires on PR-scoped events
+# and passes the PR number to the central reusable:
+#   • round 1  = a claude[bot] PR opening (the implementer's ticketed PR).
+#   • round 2+ = the implementer's <!-- request-ticketed-review --> sentinel comment.
+# The reusable no-ops on any PR that resolves no Bonsai ticket (PR-first owns those) and on any
+# non-claude[bot] / closed PR. Pin to the SHA tagged in DriverDigital/workflows (REPIN per repo).
+name: Ticketed review
+on:
+  pull_request:
+    types: [opened, ready_for_review, reopened]
+  issue_comment:
+    types: [created]
+
+# One review per PR at a time; queue (don't cancel) so a round-2 sentinel can't cancel an
+# in-flight round, and duplicate/forged sentinels can't fan out parallel opus-xhigh runs.
+concurrency:
+  group: ticketed-review-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: false
+
+# Least-privilege token for the reusable's GitHub ops — declared explicitly here, NOT inherited.
+# Without this block a repo whose default workflow-token permission is "read" caps pull-requests and
+# issues at none, so the reusable's `pull-requests: write` request exceeds the ceiling and the whole
+# run fails workflow validation → a SILENT startup_failure (no check run, no notification). Mirrors
+# pr-first-review.yml, which has always carried it.
+permissions:
+  contents: read
+  pull-requests: write
+  issues: read
+
+jobs:
+  review:
+    # round 1: a claude[bot] PR; OR the re-review sentinel — which is posted ONLY by
+    # driver-digital-agents (login + immutable id 261291955). Gating the sentinel branch on that
+    # author stops an arbitrary PR commenter from forging the magic string to trigger a
+    # secret-holding review run + a premature Bonsai handoff (mirrors claude.yml's actor gate).
+    if: >-
+      (github.event_name == 'pull_request' && github.event.pull_request.user.login == 'claude[bot]') ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request != null &&
+       contains(github.event.comment.body, '<!-- request-ticketed-review -->') &&
+       github.event.comment.user.login == 'driver-digital-agents' &&
+       github.event.comment.user.id == 261291955)
+    uses: DriverDigital/workflows/.github/workflows/ticketed-review.yml@34826c98f47b72723b394ee5256e37ef605a1973 # v1.5.4
+    with:
+      pr_number: ${{ github.event.pull_request.number || github.event.issue.number }}
+    secrets:
+      AGENTS_GH_PAT:           ${{ secrets.AGENTS_GH_PAT }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      BONSAI_BEARER_TOKEN:     ${{ secrets.BONSAI_BEARER_TOKEN }}

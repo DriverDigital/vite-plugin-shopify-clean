@@ -1,0 +1,23 @@
+name: Dependabot keep current
+
+# CALLER STUB — install into a pipeline repo's .github/workflows/.
+# Rebases open Dependabot PRs that are BLOCKED by being out of date when a merge
+# lands on their base branch (retires the manual `@dependabot rebase`). Only acts
+# on strict (require-up-to-date) repos; inert where behind PRs merge fine.
+# Branch-agnostic: the reusable scopes to the merged PR's base, so one stub covers
+# main/develop/staging. (Closed-but-unmerged PRs produce a skipped run by design.)
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  keep-current:
+    # Pinned to DriverDigital/workflows v1.1.1
+    uses: DriverDigital/workflows/.github/workflows/dependabot-keep-current.yml@34826c98f47b72723b394ee5256e37ef605a1973 # v1.5.4
+    secrets:
+      AGENTS_GH_PAT: ${{ secrets.AGENTS_GH_PAT }}

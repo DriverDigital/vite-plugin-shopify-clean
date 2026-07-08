@@ -1,0 +1,25 @@
+name: Dependabot validate
+
+# CALLER STUB — install into a pipeline repo's .github/workflows/.
+# Calls the central UNPRIVILEGED validate reusable. Carries NO secrets — keep it
+# credential-less (it runs untrusted Dependabot build).
+#
+# ⚠️ The `name:` above MUST stay byte-identical (`Dependabot validate`) across every
+# pipeline repo — the `dependabot-report` stub's `workflow_run` trigger name-matches
+# it exactly; a drift silently disables the human-ping.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependabot-validate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    uses: DriverDigital/workflows/.github/workflows/dependabot-validate.yml@34826c98f47b72723b394ee5256e37ef605a1973 # v1.5.4
+    # NO `secrets:` line — intentional and load-bearing. Do not add one.

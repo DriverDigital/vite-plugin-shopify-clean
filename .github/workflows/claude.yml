@@ -1,0 +1,261 @@
+name: Claude Code
+
+# The implementer. claude-code-action runs the full Claude Code runtime inside a GitHub-hosted
+# runner: it reads the issue, writes code, and (driven by the prompt below) creates a
+# development-linked branch from the issue, pushes it, and OPENS A PULL REQUEST. Copy into a pilot
+# repo's .github/workflows/. It opens PRs and NEVER auto-merges; only users with write access can
+# trigger it.
+#
+# WHY THE EXPLICIT PROMPT (load-bearing): on the issue path, claude-code-action@v1 does NOT open a
+# PR by itself, and does NOT create a development-linked branch — by default it pushes a plain
+# branch and leaves a *prefilled PR-creation link* (action capabilities doc + open FR
+# anthropics/claude-code-action#894). A prefill link is not a `pull_request` event, so the status
+# sync would never advance past "In Progress". The `prompt:` below (issue events only) drives the
+# whole chain in one actor: create a DEVELOPMENT-LINKED branch from the issue (`gh issue develop`,
+# so issue<->branch<->PR are natively connected and visible from any node in the GitHub UI),
+# implement on it, push, then open a REAL PR (`gh pr create`). The PR is authored by the Claude App,
+# which is ALSO why its events cascade into bonsai-status-sync.yml (the default GITHUB_TOKEN would
+# not). bonsai-status-sync.yml then resolves the PR's linked issue via GitHub's native
+# `closingIssuesReferences` (a development link populates that on its own — empirically verified) and
+# reads the Bonsai task URL from the ISSUE body. So NOTHING depends on a task URL being copied into
+# the PR body. This branch+PR flow is model-driven (claude-code-action has no native dev-link / no
+# auto-PR), so CONFIRM at pilot validation (docs/phase2-github-setup.md step 5) that the chain forms:
+# issue -> dev-linked branch -> claude[bot] PR -> Internal Review. If the model won't drive it
+# reliably, the allow-list and the prompt are the tuning points (see claude_args below).
+#
+# TRIGGERS on `@claude` in: an issue body (the cron orchestrator opens issues and @claude's them to
+# start work), a standalone PR/issue comment, OR inside a PR review or an inline review comment (a
+# reviewer @claude's the PR to request revisions — the natural place to do it). A review-driven run
+# pushes new commits to the existing PR (synchronize -> Internal Review); it does NOT open a second
+# PR (the branch+PR prompt is gated to issue events).
+#
+# AUTH — subscription billing (Max plan), NOT pay-as-you-go:
+#   1. Run `claude setup-token` (as the Agents account) to mint an OAuth token.
+#   2. Store it as the repo/org secret CLAUDE_CODE_OAUTH_TOKEN.
+#   3. The `claude_code_oauth_token` input below consumes it.
+# PRECEDENCE TRAP: if an ANTHROPIC_API_KEY secret is also present in the env it WINS and bills at
+# API rates — keep it out of this workflow's env. (For team-owned, rotatable billing later, swap
+# to a Console API key via `anthropic_api_key` — see the commented line.)
+#
+# The Claude GitHub App must be installed on the repo: run `/install-github-app` from the Claude
+# Code CLI, or install github.com/apps/claude manually. The App identity is what creates the branch,
+# pushes, and opens the PR — which is ALSO why the PR events cascade into bonsai-status-sync.yml.
+
+on:
+  issue_comment:
+    types: [created]
+  issues:
+    # 'opened' only — the orchestrator kicks off work by putting @claude in the issue BODY at
+    # creation. 'assigned' is intentionally omitted: with the @claude-in-body guard it would
+    # re-launch a second implementer run whenever an already-@claude'd issue is (re)assigned.
+    types: [opened]
+  pull_request_review:
+    # a reviewer's @claude inside a submitted review (e.g. "Request changes") drives revisions
+    types: [submitted]
+  pull_request_review_comment:
+    # a reviewer's @claude on an inline diff comment drives revisions
+    types: [created]
+
+# Don't stack implementer runs on the same issue/PR. Review events carry pull_request.number (not
+# issue.number), so key on the PR number when present, else the issue number.
+concurrency:
+  group: claude-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  claude:
+    # Run only when @claude is present (never on the bot's own comments) AND the actor is trusted.
+    # The four branches mirror the four subscribed events; a review with no body (e.g. a bare
+    # approve) has a null review.body, and contains(null, …) is false — so it correctly no-ops.
+    # ACTOR GATE (defense-in-depth, officially recommended): this job holds contents/pull-requests/
+    # issues WRITE plus the Max-plan OAuth secret, so an untrusted actor (e.g. a random public-repo
+    # issue or comment) must not even start the runner. claude-code-action also refuses writes for
+    # non-write actors, but that only kicks in AFTER the job spins up; author_association fails fast
+    # before it. NOTE author_association is the actor's ORG RELATIONSHIP, not the token's scopes:
+    # OWNER/MEMBER/COLLABORATOR covers the human reviewers on the comment/review revision paths. The
+    # cron orchestrator (driver-digital-agents) is whitelisted by LOGIN + immutable account id
+    # (261291955) on the issues path — AND on the issue_comment path, where the ticketed-review
+    # rail posts its `@claude` revision requests as driver-digital-agents (same PAT, same
+    # author_association unreliability). NOT by author_association. A PAT can open an issue on a private repo WITHOUT holding the
+    # org-member relationship author_association checks for, so the orchestrator's webhook
+    # author_association is NOT reliably OWNER/MEMBER/COLLABORATOR at event time. This silently
+    # skipped the implementer on 2026-06-19 (issue created fine, but the job's gate evaluated false,
+    # so no branch and no PR — the bug this clause fixes). The login is paired with the IMMUTABLE
+    # numeric account id (261291955) — a bare login is mutable (a renamed/reclaimed account could
+    # otherwise inherit the whitelist; only exploitable on a PUBLIC repo, but cheap to close) and the
+    # id cannot be reassigned. Together they make the gate deterministic regardless of association; its PAT still
+    # carries NO code-write, and the implementer's code-write comes from the separate Claude App
+    # token. Coarse on purpose: a read-only org member would also pass, but the action's own write
+    # check still stops them.
+    if: |
+      (github.event_name == 'issues' && contains(github.event.issue.body, '@claude') &&
+        (contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association) ||
+         (github.event.issue.user.login == 'driver-digital-agents' &&
+          github.event.issue.user.id == 261291955))) ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude') &&
+        (contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) ||
+         (github.event.comment.user.login == 'driver-digital-agents' &&
+          github.event.comment.user.id == 261291955))) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.review.author_association)) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
+    runs-on: ubuntu-latest
+    # Wall-clock backstop (Maria 2026-06-26): caps a runaway/looping run at 90 min regardless of
+    # --max-turns. GitHub's default job timeout is 6h — far too loose to protect the shared Max-plan
+    # quota window. This, not the turn cap, is the real brake on a pathological run. (90 not 60: the
+    # #151 Tailwind canary took ~50 min, so 60 left little margin for a larger migration.)
+    timeout-minutes: 90
+    permissions:
+      contents: write       # create the dev-linked branch + push commits
+      pull-requests: write  # open the PR
+      issues: write         # attach the development link to the issue
+      # REQUIRED, do not drop: the action fetches a GitHub OIDC token to mint the Claude GitHub App
+      # installation token — that `claude[bot]` identity is what creates the branch / opens the PR,
+      # which is what makes the PR events cascade into bonsai-status-sync.yml. Without this the
+      # action degrades to the default GITHUB_TOKEN identity and PR events do NOT cascade (status
+      # stalls at In Progress). (Matches the action's official examples/claude.yml + setup.md.)
+      id-token: write
+      actions: read   # lets Claude read CI results on the PR during the @claude revision loop
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          # Keep the DEFAULT persist-credentials — do NOT set it to false. On the @claude-on-a-PR
+          # (issue_comment / review) path, claude-code-action runs an early `git fetch origin <pr-branch>`
+          # BEFORE it configures its own App-token git auth, so that fetch relies on the credential
+          # actions/checkout persists. Stripping it works on a PUBLIC repo (anonymous fetch) but 403s on a
+          # PRIVATE repo ("fatal: could not read Username for github.com") — which silently broke every
+          # @claude PR-revision run on our private repos. The action then UNSETS this header itself and
+          # pushes with the minted App token, so the claude[bot] identity (and the status-sync cascade) is
+          # preserved — verified against the action's git-config.ts and the official examples/claude.yml.
+      # Install Claude Code ourselves (latest STABLE channel), then hand it to the action below via
+      # path_to_claude_code_executable (which makes the action SKIP its own install). Two reasons:
+      #   1. UNPINNED CLI: each action release bakes in a PINNED Claude Code version (v1.0.161 installs
+      #      2.1.197). We'd rather track the current CLI without bumping the action just to move it
+      #      forward — `install.sh` with no version arg installs the latest STABLE build (auto-advances,
+      #      never pinned; not the more bleeding-edge `latest` channel). The action SHA is still bumped
+      #      periodically (Dependabot) so its bundled Agent SDK stays close to the CLI it drives.
+      #   2. RESILIENT INSTALL: the action's own install retries ONCE, no backoff, and does NOT fail the
+      #      job when the download fails — it proceeds and the SDK throws a misleading "native binary not
+      #      found". A transient `curl (35) Recv failure: Connection reset by peer` fetching the binary
+      #      killed an @claude run exactly this way (Avara PR #143, 2026-07-01). This loop retries 5x with
+      #      backoff and fails LOUDLY if the binary is still missing, so a real outage is an honest red
+      #      job — not a confusing SDK error with the tracking comment stuck on "working…".
+      # The action SHA stays PINNED (supply-chain safety); only the CLI binary floats (to current stable).
+      # Path is fixed because runs-on is ubuntu-latest (GitHub-hosted) → $HOME is always /home/runner.
+      - name: Install Claude Code (latest stable, resilient)
+        run: |
+          set +e
+          for i in 1 2 3 4 5; do
+            curl -fsSL https://claude.ai/install.sh | bash
+            [ -x "$HOME/.local/bin/claude" ] && break
+            echo "Claude Code install attempt $i failed; retrying in $((i * 3))s"
+            [ "$i" -lt 5 ] && sleep "$((i * 3))"
+          done
+          set -e
+          [ -x "$HOME/.local/bin/claude" ] || { echo "::error::Claude Code install failed after 5 attempts"; exit 1; }
+          "$HOME/.local/bin/claude" --version
+      - uses: anthropics/claude-code-action@6c0083bb7289c31716797a039b6367b3079cc46e # v1.0.162
+        with:
+          # Use the latest CLI we installed above; skips the action's own pinned-version install.
+          path_to_claude_code_executable: /home/runner/.local/bin/claude
+          # Subscription billing (Max plan). Verified input key for claude-code-action@v1.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # API-key billing instead (team-owned / rotatable):
+          # anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # PLUGINS — loaded per event, mirroring the prompt's three branches below:
+          #   • ISSUE trigger → superpowers (TDD / systematic-debugging / verification-before-completion
+          #     etc.) so the implementer can reach those skills via the Skill tool while it builds the PR.
+          #   • a `/code-review` comment/review → the code-review skill (on-demand human review).
+          #   • else (revision) → empty, so the load-bearing PR-revision flow stays byte-for-byte unchanged.
+          # All three repos are PUBLIC → fetchable unauthenticated from the ephemeral runner (it does NOT
+          # inherit the box's ~/.claude/plugins): anthropics/claude-plugins-official (the marketplace
+          # catalog) + obra/superpowers (the plugin's own source) + anthropics/claude-code (code-review).
+          plugin_marketplaces: "${{ github.event_name == 'issues' && 'https://github.com/anthropics/claude-plugins-official.git' || ((contains(github.event.comment.body, '/code-review') || contains(github.event.review.body, '/code-review')) && 'https://github.com/anthropics/claude-code.git' || '') }}"
+          plugins: "${{ github.event_name == 'issues' && 'superpowers@claude-plugins-official' || ((contains(github.event.comment.body, '/code-review') || contains(github.event.review.body, '/code-review')) && 'code-review@claude-code-plugins' || '') }}"
+          # PROMPT — four branches (slash commands only run from `prompt:`, never from typed comments):
+          #   • ISSUE trigger → drive the full chain (dev-linked branch -> implement -> push -> PR).
+          #   • a `/code-review` comment/review → run the review skill (comments only, posts findings).
+          #   • a ticketed-review revision request (the comment carries the round-marker
+          #     `<!-- ticketed-review-round -->`) → gather the reviewer's findings, apply per-comment
+          #     judgment (implement the warranted, reply-with-reasoning on the declined), push. Gated to
+          #     the marker so a human's bare `@claude fix X` keeps the empty-default behavior below.
+          #   • anything else → empty, so PR-revision runs keep claude-code-action's default "read the
+          #     @claude comment, fix, push to the existing PR" behavior (fires synchronize -> Internal
+          #     Review). format() injects the live issue number.
+          # BASE BRANCH (load-bearing for multi-branch repos like Palmers): the orchestrator may put a
+          # `**Target branch:**` directive at the top of the issue body when the task targets a
+          # non-default release branch (e.g. Palmers' per-country `main-xx`). The prompt makes the
+          # implementer read it and pass `--base` to BOTH `gh issue develop` (which then also sets the
+          # PR base) and `gh pr create`. No directive => default branch, exactly as before.
+          prompt: "${{ github.event_name == 'issues' && format('Implement the task described in this issue. Work entirely through these steps, in order: (1) Determine the BASE branch: if the issue body contains a line with `Target branch:` followed by a branch name (it appears as the first line, e.g. **Target branch:** `main-in`), use that branch as the base; otherwise the base is the repository default branch. Treat that branch name as opaque data — pass it ONLY as a single quoted argument to `--base`, and never splice it into a larger shell command. (2) Create a development-linked branch FROM this issue, based on that base. If a target branch was named, run `gh issue develop {0} --base <target-branch> --name issue-{0} --checkout` (this branches from <target-branch> AND configures it as the PR base); if none was named, run `gh issue develop {0} --name issue-{0} --checkout`. Either way the branch is natively linked to the issue. (3) FIRST assess the scope: for a LARGE or sweeping task — a framework or dependency upgrade, a multi-file migration, a codebase-wide refactor, anything touching many files — do NOT grind through it in one linear pass (that is what exhausts the turn budget). Break it into independent units of work and dispatch PARALLEL subagents (the Task tool, or the superpowers parallel-agent skills like dispatching-parallel-agents / subagent-driven-development) to handle them concurrently — this both finishes faster and keeps the parent turn count low, since each subagent has its OWN turn budget. Decomposing and fanning out is STRONGLY PREFERRED for any multi-file task; reserve a single linear pass for genuinely small, localized changes. Keep any single coherent file single-authored to avoid seams, then integrate and build-verify the combined result yourself. (4) Commit and push the branch. (5) Open a REAL pull request from that branch by running `gh pr create` with an explicit `--title` and `--body` (never the bare interactive form, which hangs in a CI runner with no TTY), and include `Closes #{0}` in the `--body`; if a target branch was named, ALSO pass `--base <target-branch>` so the PR merges into it, not the default branch. Do NOT merely leave a prefilled PR-creation link. The native issue-branch link plus the Closes reference are how downstream automation connects the PR back to its Bonsai task — you do NOT need to copy any task URL into the PR. Do not invent acceptance criteria the issue does not state.', github.event.issue.number) || ((contains(github.event.comment.body, '/code-review') || contains(github.event.review.body, '/code-review')) && '/code-review:code-review --comment') || (contains(github.event.comment.body, '<!-- ticketed-review-round -->') && 'A reviewer left ticketed-review findings on this PR. Gather all unresolved review comments. For each, judge whether the requested change is warranted: implement the warranted ones; for any you decline, post a brief inline comment (mcp__github_inline_comment__create_inline_comment) at that location explaining why. Then commit and push to the PR branch. Be concise.') || '' }}"
+          # --allowedTools IS REQUIRED + must be COMPLETE (corrected 2026-06-24 after the canary). The
+          # #17 "drop the list — agent mode auto-allows everything" premise was WRONG, same as the reviewer
+          # rail: claude-code-action's permission layer DENIES any tool not on the parsed allow-list (no
+          # human to approve in CI), regardless of agent mode. The NO-LIST canary on the pilot logged
+          # 25 permission denials over 32 turns and opened NO branch and NO PR — Bash/Write/Edit/gh were all
+          # denied, so the model could do nothing. So the list must EXIST and name everything the flow uses.
+          # It is GENEROUS by design — don't starve the model (a half-list is the 10-denial footgun from
+          # 2026-06-16); NOT a security grant: the real boundary is the Claude App token scope
+          # (contents/pull-requests write, no admin, no auto-merge) + branch protection. Tools: Bash
+          # (gh/git/build/test), Write/Edit/Read/Glob/Grep, Task (the subagent fan-out the prompt invites),
+          # TodoWrite, Skill (superpowers skills resolve through it), and
+          # mcp__github_inline_comment__create_inline_comment so the on-demand `/code-review` sub-path can
+          # install + use the inline-comment poster — naming it is what makes the action install that MCP
+          # server (src/mcp/install-mcp-server.ts); omitting it is exactly what silently broke posting on
+          # the reviewer rail. CAVEAT: WebSearch/WebFetch are HARDCODED default-disallowed by the action
+          # (anthropics/claude-code-action#690, still open) — no claude_args override at this SHA, so
+          # they're omitted (deep web research lives on the executor leg's bare `claude -p`). Re-add only if
+          # #690 ships a fix and this SHA is bumped.
+          # MODEL/EFFORT (Maria 2026-06-24): `opus` ALIAS (not a pinned id) so the implementer drifts to
+          # the latest Opus with the CLI; `--effort xhigh` = what "ultracode" actually is (valid:
+          # low/medium/high/xhigh/max). The issue-path prompt also DIRECTS the implementer to decompose
+          # large/multi-file tasks and dispatch parallel subagents (Task) — the auto-orchestration half of
+          # "ultracode" that --effort can't set, and STRONGLY PREFERRED over a single linear pass. Applies to
+          # all paths (implement / revision / on-demand-review).
+          # --max-turns 250 (Maria 2026-06-26; 75 -> 200 -> 250): #150 (Tailwind v4 upgrade) tripped
+          # error_max_turns at 75. The #151 canary completed the SAME migration in 133 turns at 200; raised to
+          # 250 purely for HEADROOM (the ceiling is free on tasks that already fit — it is not a budget). The
+          # prompt pushes decomposition so the PARENT turn count stays low while subagents carry their own
+          # budgets. The 90-min job timeout above — not this number — is the hard backstop.
+          claude_args: "--model opus --effort xhigh --max-turns 250 --allowedTools 'Bash,Edit,Write,Read,Glob,Grep,Task,TodoWrite,Skill,mcp__github_inline_comment__create_inline_comment'"
+
+      # Surface a FAILED run on the PR/issue. claude-code-action posts a "Claude Code is working…"
+      # tracking comment at the START and does NOT flip it to a failure state when the run errors — so it
+      # reads as perpetually in progress (e.g. a private-repo fetch failure left #133 stuck "working…").
+      # The action exposes no tracking-comment id to edit, so post an explicit failure note with the run
+      # link instead. Default GITHUB_TOKEN → github-actions[bot]; no @claude in the body, so it never
+      # re-triggers this workflow, and a comment fires no status-sync (that keys on issues/PR events).
+      - name: Surface a failed @claude run on the PR/issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          NUM: ${{ github.event.pull_request.number || github.event.issue.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          [ -n "$NUM" ] || { echo "no issue/PR number in context — nothing to comment on"; exit 0; }
+          gh issue comment "$NUM" --repo "$REPO" \
+            --body "⚠️ The \`@claude\` run failed before finishing — the progress comment above may still read \"working…\". See the [run log]($RUN_URL)."
+
+      # FALLBACK trigger for the ticketed-review loop. claude-code-action does NOT support
+      # workflow_run events (no PR context → the inline poster can't post), so the review rail can't
+      # chain off this workflow's completion. Instead: after the implementer addresses a ticketed-review
+      # revision request (the triggering comment carries the round-marker), post a sentinel comment that
+      # ticketed-review.yml listens for, which fires the next review pass. Gated to the marker so a
+      # human's bare `@claude` revision never triggers a re-review. Posted as driver-digital-agents (a
+      # USER → the comment cascades; the default github-actions[bot] would be recursion-blocked). The
+      # sentinel body carries NO `@claude`, so it does not re-summon this workflow (no loop).
+      # `!cancelled()` (NOT success()): fire even if the revision run ERRORED, so a crashed revision
+      # still drives the loop to the reviewer's R=3 handoff (the rail always reaches a human) instead
+      # of stalling silently. The R=3 cap bounds the retries; a clean re-review just hands off.
+      - name: Re-request ticketed review (round R+1 trigger)
+        if: ${{ !cancelled() && github.event_name == 'issue_comment' && github.event.issue.pull_request != null && contains(github.event.comment.body, '<!-- ticketed-review-round -->') }}
+        env:
+          GH_TOKEN: ${{ secrets.AGENTS_GH_PAT }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.issue.number }}
+        run: |
+          gh pr comment "$PR" --repo "$REPO" \
+            --body '<!-- request-ticketed-review --> Revisions addressed; re-requesting the ticketed review.'
