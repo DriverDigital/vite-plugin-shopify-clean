@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   report:
-    uses: DriverDigital/workflows/.github/workflows/dependabot-report.yml@34826c98f47b72723b394ee5256e37ef605a1973 # v1.5.4
+    uses: DriverDigital/workflows/.github/workflows/dependabot-report.yml@0b1a657ba6db038ae0bfa845dff758709f0567ab # v1.5.5
     with:
       triggering-run-id: ${{ github.event.workflow_run.id }}
       head-repository: ${{ github.event.workflow_run.head_repository.full_name }}
