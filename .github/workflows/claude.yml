@@ -183,7 +183,12 @@ jobs:
           # store's client credentials sit on the runner's disk, so it must be REVIEWED code, not
           # whatever driver-agents' default branch happens to hold at run time. Bump deliberately,
           # then re-copy the kit in the next fleet wave.
-          DRIVER_AGENTS_REF: b798f6f19fb95e145a5988aa60726ca09f75f18d # main @ 2026-07-30
+          DRIVER_AGENTS_REF: 0404c4e910c10e2c79bf53f50c94ca9194b47eb9 # main @ 2026-07-31
+          # Optional: the #driver-agents-status Slack incoming-webhook URL (org-level secret, set
+          # org-wide — nothing per repo). When present, the tool's destructive/failed-call alerts
+          # fire from CI runs exactly as they do on the box; absent = alerts off, nothing else
+          # changes — the same best-effort posture as the tool's own alerting.
+          SHOPIFY_ALERT_WEBHOOK: ${{ secrets.SHOPIFY_ALERT_WEBHOOK }}
         run: |
           if [ -z "$SHOPIFY_STORE_NAME" ] || [ -z "$DRIVER_AGENTS_SCOPES_CLIENT_ID" ] || [ -z "$DRIVER_AGENTS_SCOPES_CLIENT_SECRET" ] || [ -z "$SHOPIFY_SHOP" ] || [ -z "$GH_TOKEN" ]; then
             echo "Shopify store tooling not configured for this repo — skipping"; exit 0
@@ -229,6 +234,15 @@ jobs:
             echo "SHOPIFY_STORE_DIR=$RUNNER_TEMP/shopify-stores"
             echo "SHOPIFY_AUDIT_DIR=$RUNNER_TEMP/shopify-audit"
           } >> "$GITHUB_ENV"
+          if [ -n "$SHOPIFY_ALERT_WEBHOOK" ]; then
+            printf '%s\n' "$SHOPIFY_ALERT_WEBHOOK" > "$RUNNER_TEMP/shopify-alert-webhook"
+            {
+              echo "SHOPIFY_ALERT_WEBHOOK_FILE=$RUNNER_TEMP/shopify-alert-webhook"
+              # The runner's audit log is throwaway disk, so the alert's "where to look" label
+              # points at the run itself — its log carries the tool's stderr for the failure.
+              echo "SHOPIFY_ALERT_HOST_LABEL=GitHub Actions run $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            } >> "$GITHUB_ENV"
+          fi
           echo "Provisioned store '$SHOPIFY_STORE_NAME' for the Shopify admin tool"
       # Install Claude Code ourselves (latest STABLE channel), then hand it to the action below via
       # path_to_claude_code_executable (which makes the action SKIP its own install). Two reasons:
