@@ -80,6 +80,11 @@ jobs:
           REVIEW_STATE: ${{ github.event.review.state }}
           DRAFT: ${{ github.event.pull_request.draft }}
           ISSUE_BODY: ${{ github.event.issue.body }}
+          # actor trust — gates the issue->In Progress flip (see the issues) case). assoc is the
+          # org relationship; login+id mirror claude.yml's orchestrator allowance (see that gate).
+          ISSUE_AUTHOR_ASSOC: ${{ github.event.issue.author_association }}
+          ISSUE_USER_LOGIN: ${{ github.event.issue.user.login }}
+          ISSUE_USER_ID: ${{ github.event.issue.user.id }}
           # for the PR/review-event linked-issue resolution (read-only GITHUB_TOKEN)
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -115,8 +120,22 @@ jobs:
           STATUS=""
           case "$EVENT" in
             issues)
-              # only when the issue actually summons the implementer
-              if printf '%s' "$ISSUE_BODY" | grep -qi '@claude'; then STATUS="In Progress"; fi
+              # only when the issue actually summons the implementer AND its author is trusted.
+              # Mirrors claude.yml's issues-path actor gate EXACTLY: trusted = a human
+              # OWNER/MEMBER/COLLABORATOR, OR the cron orchestrator driver-digital-agents by LOGIN +
+              # immutable account id (261291955). The login+id branch is LOAD-BEARING, not redundant:
+              # a PAT-opened issue on a private repo is NOT reliably OWNER/MEMBER/COLLABORATOR by
+              # author_association at event time (this silently skipped claude.yml's implementer on
+              # 2026-06-19), so without it the In Progress flip would skip for the orchestrator's OWN
+              # issues even though claude.yml runs — leaving the task stuck. On a PUBLIC repo the
+              # whole gate still stops a stranger from flipping a Bonsai task via a crafted @claude
+              # issue body (this step holds BONSAI_TOKEN). PR/review events are bot/reviewer driven
+              # and deliberately ungated (gating PR author_association would skip claude[bot] PRs).
+              if printf '%s' "$ISSUE_BODY" | grep -qi '@claude' \
+                 && { printf '%s' "$ISSUE_AUTHOR_ASSOC" | grep -qE '^(OWNER|MEMBER|COLLABORATOR)$' \
+                      || { [ "$ISSUE_USER_LOGIN" = 'driver-digital-agents' ] && [ "$ISSUE_USER_ID" = '261291955' ]; }; }; then
+                STATUS="In Progress"
+              fi
               ;;
             pull_request)
               case "$ACTION" in
