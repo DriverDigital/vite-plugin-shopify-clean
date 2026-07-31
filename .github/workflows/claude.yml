@@ -117,8 +117,17 @@ jobs:
       # stalls at In Progress). (Matches the action's official examples/claude.yml + setup.md.)
       id-token: write
       actions: read   # lets Claude read CI results on the PR during the @claude revision loop
+    env:
+      # Shopify admin tool wiring (driver-agents). SHOPIFY_STORE_NAME is the per-repo store handle
+      # the agent passes to `--store` (and the env-file name the provisioning step writes) — SET IT
+      # when the repo has store secrets; empty = this repo has no store tooling and the provisioning
+      # step self-skips. The tool's paths (DRIVER_AGENTS_DIR / SHOPIFY_STORE_DIR / SHOPIFY_AUDIT_DIR)
+      # are exported to the job by the provisioning step via $GITHUB_ENV — they CANNOT live here:
+      # the `runner` context is unavailable at job-level env (GitHub rejects the whole workflow file
+      # with "Unrecognized named-value: runner" — actions/runner#2204).
+      SHOPIFY_STORE_NAME: ""
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           # Keep the DEFAULT persist-credentials — do NOT set it to false. On the @claude-on-a-PR
@@ -129,26 +138,121 @@ jobs:
           # @claude PR-revision run on our private repos. The action then UNSETS this header itself and
           # pushes with the minted App token, so the claude[bot] identity (and the status-sync cascade) is
           # preserved — verified against the action's git-config.ts and the official examples/claude.yml.
+      # Shopify Admin tool (driver-agents) — OPTIONAL, self-skipping. When SHOPIFY_STORE_NAME (env
+      # above) is set AND the repo carries store secrets (DRIVER_AGENTS_SCOPES_CLIENT_ID /
+      # DRIVER_AGENTS_SCOPES_CLIENT_SECRET — named for the "Driver Agents Scopes" custom app in the
+      # store's Dev Dashboard, since a repo may someday hold other apps' credentials — plus
+      # SHOPIFY_STORE = the myshopify domain), this clones the private driver-agents repo
+      # (AGENTS_GH_PAT has read) and writes the store env file the tool reads. The implementer can then
+      # create metaobjects/metafields as part of a dev ticket:
+      #   "$DRIVER_AGENTS_DIR/tools/shopify/admin-graphql.sh" --store "$SHOPIFY_STORE_NAME" -q '...'
+      # (The repo's CLAUDE.md documents the schema-in-repo convention the implementer follows.)
+      # CLIENT_ID/CLIENT_SECRET are the app's long-lived credentials; the tool mints a 24h access
+      # token per run via the client credentials grant — no long-lived token in GitHub secrets,
+      # nothing rotates; the minted token is cached only on the runner's throwaway disk for the job.
+      # RESILIENCE (same lesson as the CLI install below — Avara PR #143): each clone attempt is
+      # bounded by `timeout` and retries 5x with backoff, and if it STILL fails this step DEGRADES
+      # (::warning:: + exit 0) instead of failing the job — a provisioning blip must not kill an
+      # implementer run that may not even touch Shopify. A ticket that DOES need the tool surfaces
+      # the gap in its PR (CLAUDE.md says how).
+      # SUPPLY CHAIN: driver-agents is cloned at a PINNED revision (DRIVER_AGENTS_REF below) and the
+      # checkout is verified against it before any credential is written to disk — unreviewed code
+      # never reaches the store's client credentials. Bumping the tool is a deliberate edit here.
+      # Repos without store secrets skip this cleanly: no failure, no tool, no new attack surface.
+      - name: Provision Shopify admin tool (self-skipping)
+        # LEAST PRIVILEGE (from the review on Avara PR #161): without the `if:` below this step
+        # has no event gate, so on a repo that HAS store secrets it wrote the store env file on
+        # every rail the job handles — including a `/code-review` request, which only reads a diff and posts
+        # comments yet still runs with `Bash` on the allow-list. CLIENT_ID/CLIENT_SECRET are the
+        # app's LONG-LIVED credentials (a leak means store access until someone rotates the app by
+        # hand, unlike the 24h token the tool mints), so the read-only rail has no business holding
+        # them. Same expression as `plugin_marketplaces` below, so the two stay in step.
+        # Do NOT "simplify" this to `github.event_name == 'issues'`: that would also strip the tool
+        # from the ticketed-review revision rail and from a human's `@claude add a metafield…`,
+        # both of which do real implementation work and may legitimately need store access.
+        # (The ticketed rail's own revision comment carries only the round marker and `@claude`,
+        # never the literal `/code-review`, so it is unaffected by this gate.)
+        if: ${{ !(contains(github.event.comment.body, '/code-review') || contains(github.event.review.body, '/code-review')) }}
+        env:
+          DRIVER_AGENTS_SCOPES_CLIENT_ID: ${{ secrets.DRIVER_AGENTS_SCOPES_CLIENT_ID }}
+          DRIVER_AGENTS_SCOPES_CLIENT_SECRET: ${{ secrets.DRIVER_AGENTS_SCOPES_CLIENT_SECRET }}
+          SHOPIFY_SHOP: ${{ secrets.SHOPIFY_STORE }}
+          GH_TOKEN: ${{ secrets.AGENTS_GH_PAT }}
+          # PINNED driver-agents revision — the same immutable-SHA rule this repo already applies to
+          # every `uses:`. admin-graphql.sh is executed by the write-capable implementer while the
+          # store's client credentials sit on the runner's disk, so it must be REVIEWED code, not
+          # whatever driver-agents' default branch happens to hold at run time. Bump deliberately,
+          # then re-copy the kit in the next fleet wave.
+          DRIVER_AGENTS_REF: b798f6f19fb95e145a5988aa60726ca09f75f18d # main @ 2026-07-30
+        run: |
+          if [ -z "$SHOPIFY_STORE_NAME" ] || [ -z "$DRIVER_AGENTS_SCOPES_CLIENT_ID" ] || [ -z "$DRIVER_AGENTS_SCOPES_CLIENT_SECRET" ] || [ -z "$SHOPIFY_SHOP" ] || [ -z "$GH_TOKEN" ]; then
+            echo "Shopify store tooling not configured for this repo — skipping"; exit 0
+          fi
+          # SHOPIFY_STORE_NAME becomes a filename below. Reject anything that isn't a plain store
+          # handle (no separators, no traversal, no control characters). This is a misconfiguration,
+          # not a transient blip, so it fails LOUD — same house rule as bonsai-status-sync.yml's
+          # STATUS_NOT_FOUND: never write a malformed env file the tool would silently fail to find.
+          case "$SHOPIFY_STORE_NAME" in
+            *[!a-zA-Z0-9._-]*|.*)
+              echo "::error::SHOPIFY_STORE_NAME '$SHOPIFY_STORE_NAME' is not a plain store handle (allowed: A-Z a-z 0-9 . _ -, no leading dot)"
+              exit 1 ;;
+          esac
+          set +e
+          for i in 1 2 3 4 5; do
+            # `timeout` is load-bearing: a hung clone would otherwise sit in a single attempt until
+            # the 90-minute job timeout and the retry/backoff below would never advance. Full clone
+            # (no --depth 1) so the pinned SHA is always reachable — driver-agents is ~20 KB, so the
+            # extra history costs nothing; revisit if that repo ever grows.
+            timeout 120 gh repo clone DriverDigital/driver-agents "$RUNNER_TEMP/driver-agents" -- --quiet &&
+              git -C "$RUNNER_TEMP/driver-agents" checkout -q "$DRIVER_AGENTS_REF" && break
+            echo "driver-agents clone attempt $i failed; retrying in $((i * 3))s"
+            rm -rf "$RUNNER_TEMP/driver-agents"
+            [ "$i" -lt 5 ] && sleep "$((i * 3))"
+          done
+          set -e
+          # Fail CLOSED on the credential path: unless the checkout is verifiably AT the pinned
+          # revision, write no store env file and export no paths. The run itself still proceeds — a
+          # provisioning blip must not kill an implementer run that may never touch Shopify.
+          if [ "$(git -C "$RUNNER_TEMP/driver-agents" rev-parse HEAD 2>/dev/null)" != "$DRIVER_AGENTS_REF" ] ||
+             [ ! -x "$RUNNER_TEMP/driver-agents/tools/shopify/admin-graphql.sh" ]; then
+            echo "::warning::Shopify admin tool provisioning failed (driver-agents unavailable, or not at the pinned revision $DRIVER_AGENTS_REF) — this run proceeds WITHOUT store access"
+            rm -rf "$RUNNER_TEMP/driver-agents"
+            exit 0
+          fi
+          umask 077
+          mkdir -p "$RUNNER_TEMP/shopify-stores"
+          printf 'SHOP=%s\nCLIENT_ID=%s\nCLIENT_SECRET=%s\n' \
+            "$SHOPIFY_SHOP" "$DRIVER_AGENTS_SCOPES_CLIENT_ID" "$DRIVER_AGENTS_SCOPES_CLIENT_SECRET" \
+            > "$RUNNER_TEMP/shopify-stores/$SHOPIFY_STORE_NAME.env"
+          {
+            echo "DRIVER_AGENTS_DIR=$RUNNER_TEMP/driver-agents"
+            echo "SHOPIFY_STORE_DIR=$RUNNER_TEMP/shopify-stores"
+            echo "SHOPIFY_AUDIT_DIR=$RUNNER_TEMP/shopify-audit"
+          } >> "$GITHUB_ENV"
+          echo "Provisioned store '$SHOPIFY_STORE_NAME' for the Shopify admin tool"
       # Install Claude Code ourselves (latest STABLE channel), then hand it to the action below via
       # path_to_claude_code_executable (which makes the action SKIP its own install). Two reasons:
-      #   1. UNPINNED CLI: each action release bakes in a PINNED Claude Code version (v1.0.161 installs
-      #      2.1.197). We'd rather track the current CLI without bumping the action just to move it
+      #   1. UNPINNED CLI: each action release bakes in a PINNED Claude Code version. We'd rather
+      #      track the current CLI without bumping the action just to move it
       #      forward — `install.sh` with no version arg installs the latest STABLE build (auto-advances,
       #      never pinned; not the more bleeding-edge `latest` channel). The action SHA is still bumped
       #      periodically (Dependabot) so its bundled Agent SDK stays close to the CLI it drives.
       #   2. RESILIENT INSTALL: the action's own install retries ONCE, no backoff, and does NOT fail the
       #      job when the download fails — it proceeds and the SDK throws a misleading "native binary not
       #      found". A transient `curl (35) Recv failure: Connection reset by peer` fetching the binary
-      #      killed an @claude run exactly this way (Avara PR #143, 2026-07-01). This loop retries 5x with
-      #      backoff and fails LOUDLY if the binary is still missing, so a real outage is an honest red
-      #      job — not a confusing SDK error with the tracking comment stuck on "working…".
+      #      killed an @claude run exactly this way (Avara PR #143, 2026-07-01). This loop bounds each
+      #      attempt with `timeout`, retries 5x with backoff, and fails LOUDLY if the binary is still
+      #      missing, so a real outage is an honest red job — not a confusing SDK error with the
+      #      tracking comment stuck on "working…".
       # The action SHA stays PINNED (supply-chain safety); only the CLI binary floats (to current stable).
       # Path is fixed because runs-on is ubuntu-latest (GitHub-hosted) → $HOME is always /home/runner.
       - name: Install Claude Code (latest stable, resilient)
         run: |
           set +e
           for i in 1 2 3 4 5; do
-            curl -fsSL https://claude.ai/install.sh | bash
+            # `timeout` because install.sh downloads the CLI binary itself — a stalled transfer
+            # would otherwise hang this attempt forever and the retry below would never advance.
+            timeout 180 bash -c 'curl -fsSL https://claude.ai/install.sh | bash'
             [ -x "$HOME/.local/bin/claude" ] && break
             echo "Claude Code install attempt $i failed; retrying in $((i * 3))s"
             [ "$i" -lt 5 ] && sleep "$((i * 3))"
@@ -156,7 +260,7 @@ jobs:
           set -e
           [ -x "$HOME/.local/bin/claude" ] || { echo "::error::Claude Code install failed after 5 attempts"; exit 1; }
           "$HOME/.local/bin/claude" --version
-      - uses: anthropics/claude-code-action@6c0083bb7289c31716797a039b6367b3079cc46e # v1.0.162
+      - uses: anthropics/claude-code-action@be7b93b1907a4abad570368f3c74b6fe3807510b # v1.0.183
         with:
           # Use the latest CLI we installed above; skips the action's own pinned-version install.
           path_to_claude_code_executable: /home/runner/.local/bin/claude
@@ -164,32 +268,52 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # API-key billing instead (team-owned / rotatable):
           # anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          # PLUGINS — loaded per event, mirroring the prompt's three branches below:
+          # PLUGINS — installed per event. Installing a plugin only makes it AVAILABLE (via the Skill
+          # tool); it never changes the prompt routing below — install ≠ instruct:
           #   • ISSUE trigger → superpowers (TDD / systematic-debugging / verification-before-completion
           #     etc.) so the implementer can reach those skills via the Skill tool while it builds the PR.
-          #   • a `/code-review` comment/review → the code-review skill (on-demand human review).
+          #   • a comment/review that names `/code-review` → install the code-review plugin so Claude
+          #     CAN invoke `/code-review:code-review` when the human asks for it (see PROMPT below —
+          #     the human's comment itself is never replaced).
           #   • else (revision) → empty, so the load-bearing PR-revision flow stays byte-for-byte unchanged.
           # All three repos are PUBLIC → fetchable unauthenticated from the ephemeral runner (it does NOT
           # inherit the box's ~/.claude/plugins): anthropics/claude-plugins-official (the marketplace
           # catalog) + obra/superpowers (the plugin's own source) + anthropics/claude-code (code-review).
           plugin_marketplaces: "${{ github.event_name == 'issues' && 'https://github.com/anthropics/claude-plugins-official.git' || ((contains(github.event.comment.body, '/code-review') || contains(github.event.review.body, '/code-review')) && 'https://github.com/anthropics/claude-code.git' || '') }}"
           plugins: "${{ github.event_name == 'issues' && 'superpowers@claude-plugins-official' || ((contains(github.event.comment.body, '/code-review') || contains(github.event.review.body, '/code-review')) && 'code-review@claude-code-plugins' || '') }}"
-          # PROMPT — four branches (slash commands only run from `prompt:`, never from typed comments):
-          #   • ISSUE trigger → drive the full chain (dev-linked branch -> implement -> push -> PR).
-          #   • a `/code-review` comment/review → run the review skill (comments only, posts findings).
+          # PROMPT — three branches. AUTOMATION gets explicit prompts; HUMANS never do:
+          #   • ISSUE trigger (orchestrator-authored body) → drive the full chain (dev-linked branch ->
+          #     implement -> push -> PR).
           #   • a ticketed-review revision request (the comment carries the round-marker
-          #     `<!-- ticketed-review-round -->`) → gather the reviewer's findings, apply per-comment
-          #     judgment (implement the warranted, reply-with-reasoning on the declined), push. Gated to
-          #     the marker so a human's bare `@claude fix X` keeps the empty-default behavior below.
-          #   • anything else → empty, so PR-revision runs keep claude-code-action's default "read the
-          #     @claude comment, fix, push to the existing PR" behavior (fires synchronize -> Internal
-          #     Review). format() injects the live issue number.
+          #     `<!-- ticketed-review-round -->` AND is authored by driver-digital-agents — the branch
+          #     checks login + immutable id, not just the marker, because a human clicking GitHub's
+          #     "Quote reply" on the agents' revision comment copies the RAW markdown including the
+          #     HTML marker; content alone would prompt-hijack that human) → gather the reviewer's
+          #     findings, apply per-comment judgment (implement the warranted, reply-with-reasoning
+          #     on the declined), push. A human's bare `@claude fix X` (or quote-reply) keeps the
+          #     empty-default behavior below.
+          #   • ANYTHING ELSE — i.e. every human-authored comment or review — → EMPTY prompt, which is
+          #     claude-code-action's TAG MODE: the action embeds the human's actual comment text in the
+          #     context, posts a visible "working…" tracking comment, and surfaces Claude's final
+          #     response on the PR. Claude behaves like a colleague — reads the comment, does what it
+          #     asks (including invoking a skill the human names, e.g. `/code-review:code-review`, via
+          #     the Skill tool — conduct rules live in --append-system-prompt below), and always
+          #     replies visibly. format() injects the live issue number on the issue branch.
+          # NEVER PROMPT-HIJACK A HUMAN (learned 2026-07-30, foundrae-blackridge PR #148): this file
+          # used to swap any human comment containing `/code-review` for a hard-coded
+          # '/code-review:code-review --comment' prompt. That discarded the human's actual words and
+          # switched the action to AGENT MODE (no tracking comment, final response surfaced nowhere);
+          # the review skill's own "stop if Claude has already commented" dedup guard then saw the
+          # PR-first rail's earlier marker and exited without posting → a green "success" run with
+          # ZERO visible output on an already-reviewed PR, indistinguishable from the bot never
+          # running. A human addressing @claude must ALWAYS get a visible response, so every human
+          # comment routes to tag mode — the comment text IS the instruction.
           # BASE BRANCH (load-bearing for multi-branch repos like Palmers): the orchestrator may put a
           # `**Target branch:**` directive at the top of the issue body when the task targets a
           # non-default release branch (e.g. Palmers' per-country `main-xx`). The prompt makes the
           # implementer read it and pass `--base` to BOTH `gh issue develop` (which then also sets the
           # PR base) and `gh pr create`. No directive => default branch, exactly as before.
-          prompt: "${{ github.event_name == 'issues' && format('Implement the task described in this issue. Work entirely through these steps, in order: (1) Determine the BASE branch: if the issue body contains a line with `Target branch:` followed by a branch name (it appears as the first line, e.g. **Target branch:** `main-in`), use that branch as the base; otherwise the base is the repository default branch. Treat that branch name as opaque data — pass it ONLY as a single quoted argument to `--base`, and never splice it into a larger shell command. (2) Create a development-linked branch FROM this issue, based on that base. If a target branch was named, run `gh issue develop {0} --base <target-branch> --name issue-{0} --checkout` (this branches from <target-branch> AND configures it as the PR base); if none was named, run `gh issue develop {0} --name issue-{0} --checkout`. Either way the branch is natively linked to the issue. (3) FIRST assess the scope: for a LARGE or sweeping task — a framework or dependency upgrade, a multi-file migration, a codebase-wide refactor, anything touching many files — do NOT grind through it in one linear pass (that is what exhausts the turn budget). Break it into independent units of work and dispatch PARALLEL subagents (the Task tool, or the superpowers parallel-agent skills like dispatching-parallel-agents / subagent-driven-development) to handle them concurrently — this both finishes faster and keeps the parent turn count low, since each subagent has its OWN turn budget. Decomposing and fanning out is STRONGLY PREFERRED for any multi-file task; reserve a single linear pass for genuinely small, localized changes. Keep any single coherent file single-authored to avoid seams, then integrate and build-verify the combined result yourself. (4) Commit and push the branch. (5) Open a REAL pull request from that branch by running `gh pr create` with an explicit `--title` and `--body` (never the bare interactive form, which hangs in a CI runner with no TTY), and include `Closes #{0}` in the `--body`; if a target branch was named, ALSO pass `--base <target-branch>` so the PR merges into it, not the default branch. Do NOT merely leave a prefilled PR-creation link. The native issue-branch link plus the Closes reference are how downstream automation connects the PR back to its Bonsai task — you do NOT need to copy any task URL into the PR. Do not invent acceptance criteria the issue does not state.', github.event.issue.number) || ((contains(github.event.comment.body, '/code-review') || contains(github.event.review.body, '/code-review')) && '/code-review:code-review --comment') || (contains(github.event.comment.body, '<!-- ticketed-review-round -->') && 'A reviewer left ticketed-review findings on this PR. Gather all unresolved review comments. For each, judge whether the requested change is warranted: implement the warranted ones; for any you decline, post a brief inline comment (mcp__github_inline_comment__create_inline_comment) at that location explaining why. Then commit and push to the PR branch. Be concise.') || '' }}"
+          prompt: "${{ github.event_name == 'issues' && format('Implement the task described in this issue. Work entirely through these steps, in order: (1) Determine the BASE branch: if the issue body contains a line with `Target branch:` followed by a branch name (it appears as the first line, e.g. **Target branch:** `main-in`), use that branch as the base; otherwise the base is the repository default branch. Treat that branch name as opaque data — pass it ONLY as a single quoted argument to `--base`, and never splice it into a larger shell command. (2) Create a development-linked branch FROM this issue, based on that base. If a target branch was named, run `gh issue develop {0} --base <target-branch> --name issue-{0} --checkout` (this branches from <target-branch> AND configures it as the PR base); if none was named, run `gh issue develop {0} --name issue-{0} --checkout`. Either way the branch is natively linked to the issue. (3) FIRST assess the scope: for a LARGE or sweeping task — a framework or dependency upgrade, a multi-file migration, a codebase-wide refactor, anything touching many files — do NOT grind through it in one linear pass (that is what exhausts the turn budget). Break it into independent units of work and dispatch PARALLEL subagents (the Task tool, or the superpowers parallel-agent skills like dispatching-parallel-agents / subagent-driven-development) to handle them concurrently — this both finishes faster and keeps the parent turn count low, since each subagent has its OWN turn budget. Decomposing and fanning out is STRONGLY PREFERRED for any multi-file task; reserve a single linear pass for genuinely small, localized changes. Keep any single coherent file single-authored to avoid seams, then integrate and build-verify the combined result yourself. (4) Commit and push the branch. (5) Open a REAL pull request from that branch by running `gh pr create` with an explicit `--title` and `--body` (never the bare interactive form, which hangs in a CI runner with no TTY), and include `Closes #{0}` in the `--body`; if a target branch was named, ALSO pass `--base <target-branch>` so the PR merges into it, not the default branch. Do NOT merely leave a prefilled PR-creation link. The native issue-branch link plus the Closes reference are how downstream automation connects the PR back to its Bonsai task — you do NOT need to copy any task URL into the PR. Do not invent acceptance criteria the issue does not state.', github.event.issue.number) || (github.event.comment.user.login == 'driver-digital-agents' && github.event.comment.user.id == 261291955 && contains(github.event.comment.body, '<!-- ticketed-review-round -->') && 'A reviewer left ticketed-review findings on this PR. Gather all unresolved review comments. For each, judge whether the requested change is warranted: implement the warranted ones; for any you decline, post a brief inline comment (mcp__github_inline_comment__create_inline_comment) at that location explaining why. Then commit and push to the PR branch. Be concise.') || '' }}"
           # --allowedTools IS REQUIRED + must be COMPLETE (corrected 2026-06-24 after the canary). The
           # #17 "drop the list — agent mode auto-allows everything" premise was WRONG, same as the reviewer
           # rail: claude-code-action's permission layer DENIES any tool not on the parsed allow-list (no
@@ -219,7 +343,24 @@ jobs:
           # 250 purely for HEADROOM (the ceiling is free on tasks that already fit — it is not a budget). The
           # prompt pushes decomposition so the PARENT turn count stays low while subagents carry their own
           # budgets. The 90-min job timeout above — not this number — is the hard backstop.
-          claude_args: "--model opus --effort xhigh --max-turns 250 --allowedTools 'Bash,Edit,Write,Read,Glob,Grep,Task,TodoWrite,Skill,mcp__github_inline_comment__create_inline_comment'"
+          # --append-system-prompt (added 2026-07-30, same incident as the PROMPT note above): colleague
+          # conduct for human-addressed tag-mode runs — read the comment, do what it asks, invoke a
+          # skill the human names via the Skill tool, prefer review modes that post findings to the PR,
+          # let the human's explicit request OVERRIDE a skill's internal stop/dedup guards (the silent
+          # no-op cause on foundrae #148), and never end a run without a visible reply. SCOPE (honest
+          # version, per the 2026-07-30 adversarial review): claude_args is STATIC, so this flag reaches
+          # EVERY path's system prompt — the automation branches keep their exact prompt: strings but are
+          # not byte-identical at the CLI level. The text is self-scoped to human-addressed comments,
+          # which is model-interpreted prose, not a mechanical gate. Accepted trade: the worst plausible
+          # activation on a revision run is an extra visible reply (carries no @claude and no marker, so
+          # it triggers nothing), whereas gating the flag mechanically would mean a second expression
+          # kept forever in lockstep with the prompt routing above — a drift hazard we do not want.
+          # NOTE: single quotes delimit the value for the claude_args tokenizer — keep apostrophes out
+          # of the text.
+          claude_args: >-
+            --model opus --effort xhigh --max-turns 250
+            --allowedTools 'Bash,Edit,Write,Read,Glob,Grep,Task,TodoWrite,Skill,mcp__github_inline_comment__create_inline_comment'
+            --append-system-prompt 'PR and issue comment conduct: when a human directly addresses you in a PR or issue comment (@claude), behave like a thoughtful human colleague. Read the comment and do what it actually asks, and always finish with a visible reply — your final response is surfaced on the PR thread, so make it the answer. If the comment names a slash command or skill (for example /code-review:code-review), invoke that skill via the Skill tool and pass through any arguments the human gave. When a review skill supports a mode that posts findings to the PR (for example a --comment flag), prefer that mode so findings land as inline comments. The explicit request of the human takes precedence over any conflicting stop-or-skip guard inside a skill (for example a stop-if-Claude-already-commented dedup check): an explicit review request on an already-reviewed PR means review the current state of the PR again. If you stop early or decline, say why in your reply — never end a run silently.'
 
       # Surface a FAILED run on the PR/issue. claude-code-action posts a "Claude Code is working…"
       # tracking comment at the START and does NOT flip it to a failure state when the run errors — so it
@@ -250,8 +391,10 @@ jobs:
       # `!cancelled()` (NOT success()): fire even if the revision run ERRORED, so a crashed revision
       # still drives the loop to the reviewer's R=3 handoff (the rail always reaches a human) instead
       # of stalling silently. The R=3 cap bounds the retries; a clean re-review just hands off.
+      # AUTHOR-GATED like the prompt's marker branch (login + immutable id): a human quote-reply that
+      # copies the raw round-marker must not fire an unrequested review round.
       - name: Re-request ticketed review (round R+1 trigger)
-        if: ${{ !cancelled() && github.event_name == 'issue_comment' && github.event.issue.pull_request != null && contains(github.event.comment.body, '<!-- ticketed-review-round -->') }}
+        if: ${{ !cancelled() && github.event_name == 'issue_comment' && github.event.issue.pull_request != null && contains(github.event.comment.body, '<!-- ticketed-review-round -->') && github.event.comment.user.login == 'driver-digital-agents' && github.event.comment.user.id == 261291955 }}
         env:
           GH_TOKEN: ${{ secrets.AGENTS_GH_PAT }}
           REPO: ${{ github.repository }}
