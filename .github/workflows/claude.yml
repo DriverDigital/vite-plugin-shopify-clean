@@ -183,12 +183,14 @@ jobs:
           # store's client credentials sit on the runner's disk, so it must be REVIEWED code, not
           # whatever driver-agents' default branch happens to hold at run time. Bump deliberately,
           # then re-copy the kit in the next fleet wave.
-          DRIVER_AGENTS_REF: 0404c4e910c10e2c79bf53f50c94ca9194b47eb9 # main @ 2026-07-31
+          DRIVER_AGENTS_REF: 0bbb125f36a6cae7bb211145efb6e57f70a883e9 # main @ 2026-07-31 (audit pipeline)
           # Optional: the #driver-agents-status Slack incoming-webhook URL (org-level secret, set
           # org-wide — nothing per repo). When present, the tool's destructive/failed-call alerts
           # fire from CI runs exactly as they do on the box; absent = alerts off, nothing else
           # changes — the same best-effort posture as the tool's own alerting.
           SHOPIFY_ALERT_WEBHOOK: ${{ secrets.SHOPIFY_ALERT_WEBHOOK }}
+          # For SHOPIFY_AUDIT_CONTEXT below: the issue (issues/issue_comment rails) or PR number.
+          ISSUE_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || '' }}
         run: |
           if [ -z "$SHOPIFY_STORE_NAME" ] || [ -z "$DRIVER_AGENTS_SCOPES_CLIENT_ID" ] || [ -z "$DRIVER_AGENTS_SCOPES_CLIENT_SECRET" ] || [ -z "$SHOPIFY_SHOP" ] || [ -z "$GH_TOKEN" ]; then
             echo "Shopify store tooling not configured for this repo — skipping"; exit 0
@@ -243,6 +245,31 @@ jobs:
               echo "SHOPIFY_ALERT_HOST_LABEL=GitHub Actions run $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
             } >> "$GITHUB_ENV"
           fi
+          # Run context for every audit line this job's tool calls write (who/why: ticket, issue,
+          # run URL, host) — the nightly publisher maps `ticket` into the client-visible app-home
+          # trail; `issue`/`run` stay driver-side. The Bonsai task uuid lives in the ISSUE body
+          # (`uuid=` query param — the same linkage bonsai-status-sync.yml greps); on the
+          # @claude-on-a-PR rails the issue is found via closingIssuesReferences, same as the sync.
+          # All best-effort: a human's ad-hoc @claude has no ticket, and that's correct.
+          UUID_RE='uuid=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+          TICKET=""
+          if [ -n "$ISSUE_NUMBER" ]; then
+            TICKET="$(gh api "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER" --jq '.body // ""' 2>/dev/null \
+              | grep -oE "$UUID_RE" | head -1 | cut -c6-)" || TICKET=""
+            if [ -z "$TICKET" ]; then
+              # shellcheck disable=SC2016  # $o/$r/$n are GraphQL variables, not shell
+              TICKET="$(gh api graphql \
+                -f query='query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){closingIssuesReferences(first:1){nodes{body}}}}}' \
+                -f o="${GITHUB_REPOSITORY%%/*}" -f r="${GITHUB_REPOSITORY#*/}" -F n="$ISSUE_NUMBER" \
+                --jq '.data.repository.pullRequest.closingIssuesReferences.nodes[0].body // ""' 2>/dev/null \
+                | grep -oE "$UUID_RE" | head -1 | cut -c6-)" || TICKET=""
+            fi
+          fi
+          CTX="$(jq -cn --arg ticket "$TICKET" \
+            --arg issue "${ISSUE_NUMBER:+${GITHUB_REPOSITORY#*/}#$ISSUE_NUMBER}" \
+            --arg run "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            '{ticket:$ticket, issue:$issue, run:$run, host:"github-actions"} | with_entries(select(.value != ""))')"
+          echo "SHOPIFY_AUDIT_CONTEXT=$CTX" >> "$GITHUB_ENV"
           echo "Provisioned store '$SHOPIFY_STORE_NAME' for the Shopify admin tool"
       # Install Claude Code ourselves (latest STABLE channel), then hand it to the action below via
       # path_to_claude_code_executable (which makes the action SKIP its own install). Two reasons:
@@ -416,3 +443,18 @@ jobs:
         run: |
           gh pr comment "$PR" --repo "$REPO" \
             --body '<!-- request-ticketed-review --> Revisions addressed; re-requesting the ticketed review.'
+
+      # The runner's audit log is throwaway disk — this artifact is how CI tool calls reach the
+      # permanent record (the box's nightly audit-publish.sh collects it, archives it, and turns it
+      # into the client-visible app-home trail). `github.run_attempt` in the name is load-bearing:
+      # artifacts are immutable and re-run attempts share the run id, so without it a re-run's
+      # upload collides and fails — losing exactly the suspicious runs the trail most needs. Skips
+      # cleanly on repos without store tooling (env empty) and on runs where the tool never fired
+      # (if-no-files-found: ignore).
+      - name: Upload Shopify audit artifact
+        if: ${{ always() && env.SHOPIFY_AUDIT_DIR != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: shopify-audit-${{ env.SHOPIFY_STORE_NAME }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.SHOPIFY_AUDIT_DIR }}
+          if-no-files-found: ignore
