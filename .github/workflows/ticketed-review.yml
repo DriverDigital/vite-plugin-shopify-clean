@@ -40,7 +40,7 @@ jobs:
        contains(github.event.comment.body, '<!-- request-ticketed-review -->') &&
        github.event.comment.user.login == 'driver-digital-agents' &&
        github.event.comment.user.id == 261291955)
-    uses: DriverDigital/workflows/.github/workflows/ticketed-review.yml@a54c91e18117db759532201cd73b59bd086eea08 # v1.9.0
+    uses: DriverDigital/workflows/.github/workflows/ticketed-review.yml@90f0d066c140c356c44d5b3d83d795c0256a7b82 # v1.11.0
     with:
       pr_number: ${{ github.event.pull_request.number || github.event.issue.number }}
     secrets:
