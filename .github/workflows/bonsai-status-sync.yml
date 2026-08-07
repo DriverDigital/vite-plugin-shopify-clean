@@ -13,13 +13,15 @@ name: Bonsai status sync
 # WHAT STAYS HERE, AND WHY:
 #   • the TRIGGERS — a called workflow cannot declare `on:`, so the event
 #     subscription is necessarily the caller's. Keep the `types:` lists exactly
-#     as written; they are load-bearing (see the reusable's header for the
-#     dismissed-review edge and the draft guards).
+#     as written; they are load-bearing (see the reusable's case body for the
+#     draft guards). There is deliberately NO pull_request_review trigger —
+#     the review leg was retired at v1.12.0 (Macroscope reviews PRs now); see
+#     the reusable's header. Do not re-add it here without the reusable
+#     growing its handler back.
 #   • `permissions:` — a called workflow's permissions can only be DOWNGRADED by
 #     the caller. Declare all three: omitting the block on a read-only-default repo
 #     yields a silent `startup_failure` (no check run, no notification), not a 403.
-#   • `concurrency:` — see the block itself; the rationale is load-bearing and
-#     is NOT the same as pr-first-review's. Do not "harmonise" them.
+#   • `concurrency:` — see the block itself; the rationale is load-bearing.
 
 on:
   issues:
@@ -29,15 +31,13 @@ on:
     # (a bare reopen fires neither 'opened' nor 'synchronize' — without it the flip is silently
     # dropped). The draft guard in the reusable still keeps a reopened draft PR as WIP.
     types: [opened, reopened, ready_for_review, synchronize]
-  pull_request_review:
-    types: [submitted]
 
 permissions:
   contents: read
   issues: read
   pull-requests: read
 
-# One status flip per ref at a time — a rapid push/review burst can't race conflicting writes
+# One status flip per ref at a time — a rapid push burst can't race conflicting writes
 # onto the same task through the single shared browser lock; the backend browser lock serializes
 # the actual writes. Deliberately per-ref, NOT repo-wide: with cancel-in-progress:false GitHub
 # keeps only ONE pending run per group and cancels the prior pending one, so a repo-wide group
@@ -45,8 +45,8 @@ permissions:
 # (a late issue->In Progress landing after a PR->Internal Review) is a narrow window — the issue
 # event precedes the PR by the whole implementation time — and self-heals: the next PR event
 # re-flips.
-# DO NOT set cancel-in-progress: true here to match pr-first-review's stub — that rail reviews
-# once and is safe to cancel; this one WRITES STATUS and a cancelled flip is a dropped write.
+# DO NOT set cancel-in-progress: true here — this rail WRITES STATUS and a cancelled flip is a
+# dropped write.
 concurrency:
   group: bonsai-status-${{ github.event.pull_request.number || github.event.issue.number }}
   cancel-in-progress: false
@@ -56,12 +56,12 @@ jobs:
     # NOTE: the required-status-check context for this job is `sync / sync` (caller job id /
     # reusable job id), NOT the bare `sync` it was as a full workflow. Verified 2026-08-02 that
     # no branch in the org pins either, so this rename breaks nothing — re-check before adding one.
-    uses: DriverDigital/workflows/.github/workflows/bonsai-status-sync.yml@90f0d066c140c356c44d5b3d83d795c0256a7b82 # v1.11.0
+    uses: DriverDigital/workflows/.github/workflows/bonsai-status-sync.yml@b1fcb78c99a93d061f3dca57fe17ef275e069331 # v1.12.0
     # Explicit, NOT `secrets: inherit`. Two reasons: (1) `inherit` passes whatever set exists, which
     # defeats the reusable's `required: true` — a missing secret would reach the curl and surface as
     # an opaque 401 on the first real flip instead of failing at startup; (2) least privilege — this
     # rail needs one secret, and `inherit` would hand a centrally-pinned file that fires on
     # `issues: [opened]` every org secret the repo holds (AGENTS_GH_PAT, CLAUDE_CODE_OAUTH_TOKEN,
-    # the store credentials). Matches ticketed-review.yml's stub, which enumerates for the same reason.
+    # the store credentials).
     secrets:
       BONSAI_BEARER_TOKEN: ${{ secrets.BONSAI_BEARER_TOKEN }}
