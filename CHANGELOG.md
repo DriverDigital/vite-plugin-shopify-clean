@@ -1,5 +1,12 @@
 # @driver-digital/vite-plugin-shopify-clean
 
+## 2.0.1 - 2026-08-20 - Security and dependency maintenance
+
+- Resolve all six open Dependabot security alerts (postcss, brace-expansion, flatted, esbuild — dev-scope only; the published package was never affected).
+- Update dev dependencies (@types/node, typescript-eslint, eslint, vite, vitest).
+- Pin TypeScript to 6.0.3 temporarily (TypeScript 7 is outside typescript-eslint's supported range).
+- Update GitHub Actions.
+
 ## 2.0.0 - 2026-04-17 - Drop Node 18 and Vite 5
 
 - **BREAKING:** Drop Node 18 support. Now requires Node `^20.19.0 || >=22.12.0` (Vite 8 requirement).
