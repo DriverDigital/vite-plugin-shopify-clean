@@ -49,6 +49,10 @@ Deletion always goes through `safeUnlink`, which swallows `ENOENT` (file already
 
 Resolved in `src/options.ts` with defaults `manifestFileName: '.vite/manifest.json'` and `themeRoot: './'`. `manifestFileName` is resolved *under* `<themeRoot>/assets/`. Consumers must set `build.emptyOutDir: false` (documented in README) — otherwise Vite wipes the dir and there's no previous state to diff.
 
+## Dependencies
+
+- `typescript` is held at `~6.0.3` **temporarily**: TypeScript 7 is outside @typescript-eslint's supported peer range (`>=4.8.4 <6.1.0`) and breaks `npm ci`. This is a wait for typescript-eslint to catch up, not a policy — once its peer range admits TS 7, move to `^7` and drop this note. CI only runs on `main`, so a dependabot PR bumping typescript to 7.x won't fail visibly before merge — check the peer range before merging one.
+
 ## Release / branching
 
 - **`main`-only flow.** PRs (features, deps) merge into `main`; releases are cut from `main`. The `develop` branch still exists on origin but is **intentionally dormant** — don't target it, don't delete it, don't reintroduce it into workflows or config.
