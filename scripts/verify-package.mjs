@@ -91,6 +91,12 @@ try {
     fail('getFilesInManifest is not exported')
   }
 
+  if (cjs.PLUGIN_NAME === 'vite-plugin-shopify-clean') {
+    pass('PLUGIN_NAME is exported')
+  } else {
+    fail(`PLUGIN_NAME mismatch or missing: ${cjs.PLUGIN_NAME}`)
+  }
+
   // Verify plugin instantiation
   const plugin = cjs.default()
   if (plugin.name === 'vite-plugin-shopify-clean') {
@@ -119,6 +125,12 @@ try {
     pass('getFilesInManifest is exported')
   } else {
     fail('getFilesInManifest is not exported')
+  }
+
+  if (esm.PLUGIN_NAME === 'vite-plugin-shopify-clean') {
+    pass('PLUGIN_NAME is exported')
+  } else {
+    fail(`PLUGIN_NAME mismatch or missing: ${esm.PLUGIN_NAME}`)
   }
 
   // Verify plugin instantiation
