@@ -21,5 +21,5 @@ concurrency:
 
 jobs:
   validate:
-    uses: DriverDigital/workflows/.github/workflows/dependabot-validate.yml@b1fcb78c99a93d061f3dca57fe17ef275e069331 # v1.12.0
+    uses: DriverDigital/workflows/.github/workflows/dependabot-validate.yml@f6d25d3413a24a6816db0ad015310d83b7b0f7a2 # v1.13.0
     # NO `secrets:` line — intentional and load-bearing. Do not add one.
