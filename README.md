@@ -4,6 +4,8 @@ Vite plugin that cleans up your Shopify theme `assets/` folder across builds and
 
 Why you might need this: when Vite emits hashed filenames (e.g., `app-abc123.js`), older hashed files can accumulate over time. This plugin removes outdated assets safely so your `assets/` directory stays tidy and your theme only references current files.
 
+> **Note:** This repository is also used as a pipeline-dispatch test target.
+
 [GitHub](https://github.com/DriverDigital/vite-plugin-shopify-clean)
 
 [npm](https://www.npmjs.com/package/@driver-digital/vite-plugin-shopify-clean)
