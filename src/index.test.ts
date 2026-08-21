@@ -4,7 +4,7 @@ import { existsSync, promises as fs } from 'fs'
 import { tmpdir } from 'os'
 import type { Manifest, Rollup } from 'vite'
 
-import shopifyClean, { getFilesInManifest } from './index'
+import shopifyClean, { getFilesInManifest, PLUGIN_NAME } from './index'
 
 // TODO: Add test for custom manifestFileName option
 // TODO: Add test for missing assets directory warning in buildStart
@@ -32,6 +32,13 @@ function createMockBundle(manifest: Manifest): Rollup.OutputBundle {
     } as Rollup.OutputAsset,
   }
 }
+
+describe('PLUGIN_NAME', () => {
+  it('is exported and used as the plugin name', () => {
+    expect(PLUGIN_NAME).toBe('vite-plugin-shopify-clean')
+    expect(shopifyClean().name).toBe(PLUGIN_NAME)
+  })
+})
 
 describe('getFilesInManifest', () => {
   it('extracts JS, CSS, and asset files from manifest entries', () => {

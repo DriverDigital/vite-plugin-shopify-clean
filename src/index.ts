@@ -5,6 +5,8 @@ import { Manifest, Plugin } from 'vite'
 
 import { resolveOptions, VitePluginShopifyCleanOptions } from './options'
 
+export const PLUGIN_NAME = 'vite-plugin-shopify-clean'
+
 function isNodeError (err: unknown): err is NodeJS.ErrnoException {
   return err instanceof Error && 'code' in err
 }
@@ -37,7 +39,7 @@ export default function shopifyClean (options: VitePluginShopifyCleanOptions = {
   }
 
   return {
-    name: 'vite-plugin-shopify-clean',
+    name: PLUGIN_NAME,
     buildStart: async function () {
       const assetsDir = getAssetsDir()
 

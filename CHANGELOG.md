@@ -1,5 +1,9 @@
 # @driver-digital/vite-plugin-shopify-clean
 
+## Unreleased
+
+- Export `PLUGIN_NAME` constant from the package entry point and use it as the plugin's `name`.
+
 ## 2.0.1 - 2026-08-20 - Security and dependency maintenance
 
 - Resolve all six open Dependabot security alerts (postcss, brace-expansion, flatted, esbuild — dev-scope only; the published package was never affected).
