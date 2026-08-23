@@ -307,7 +307,7 @@ jobs:
           set -e
           [ -x "$HOME/.local/bin/claude" ] || { echo "::error::Claude Code install failed after 5 attempts"; exit 1; }
           "$HOME/.local/bin/claude" --version
-      - uses: anthropics/claude-code-action@d40ddef4c030e508327d6e35a9c45f3368482c50 # v1.0.195
+      - uses: anthropics/claude-code-action@3f854a8fb5146b39d5cbf8b57f70d80810e1366f # v1.0.198
         with:
           # Use the latest CLI we installed above; skips the action's own pinned-version install.
           path_to_claude_code_executable: /home/runner/.local/bin/claude
