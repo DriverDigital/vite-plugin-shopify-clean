@@ -17,6 +17,6 @@ permissions:
 
 jobs:
   keep-current:
-    uses: DriverDigital/workflows/.github/workflows/dependabot-keep-current.yml@f6d25d3413a24a6816db0ad015310d83b7b0f7a2 # v1.13.0
+    uses: DriverDigital/workflows/.github/workflows/dependabot-keep-current.yml@539d7eab0ddbf874c391fab27dc8a11bd2bb2d41 # v1.14.0
     secrets:
       AGENTS_GH_PAT: ${{ secrets.AGENTS_GH_PAT }}
