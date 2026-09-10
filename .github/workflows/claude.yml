@@ -126,7 +126,7 @@ jobs:
       # with "Unrecognized named-value: runner" — actions/runner#2204).
       SHOPIFY_STORE_NAME: ""
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           # Keep the DEFAULT persist-credentials — do NOT set it to false. On the @claude-on-a-PR
@@ -281,8 +281,9 @@ jobs:
       #   1. UNPINNED CLI: each action release bakes in a PINNED Claude Code version. We'd rather
       #      track the current CLI without bumping the action just to move it
       #      forward — `install.sh` with no version arg installs the latest STABLE build (auto-advances,
-      #      never pinned; not the more bleeding-edge `latest` channel). The action SHA is still bumped
-      #      periodically (Dependabot) so its bundled Agent SDK stays close to the CLI it drives.
+      #      never pinned; not the more bleeding-edge `latest` channel). The action floats on its `v1`
+      #      major tag (below) for the same reason: its bundled Agent SDK stays as close as it can to
+      #      the CLI it drives.
       #   2. RESILIENT INSTALL: the action's own install retries ONCE, no backoff, and does NOT fail the
       #      job when the download fails — it proceeds and the SDK throws a misleading "native binary not
       #      found". A transient `curl (35) Recv failure: Connection reset by peer` fetching the binary
@@ -290,7 +291,20 @@ jobs:
       #      attempt with `timeout`, retries 5x with backoff, and fails LOUDLY if the binary is still
       #      missing, so a real outage is an honest red job — not a confusing SDK error with the
       #      tracking comment stuck on "working…".
-      # The action SHA stays PINNED (supply-chain safety); only the CLI binary floats (to current stable).
+      # Both float on purpose: the CLI binary to current stable, the action on its `v1` tag, which
+      # Anthropic re-points on every release. The action SHA was the one pin in this file nothing
+      # bumps — Dependabot scans `.github/workflows/`, never `templates/` — while a fleet repo running
+      # the github-actions updater bumped its deployed copy when the action released, so the fleet
+      # ran ahead of the kit and each wave rolled it back (foundrae-blackridge #174). Dependabot
+      # respects the precision a ref chose and leaves `@v1` alone until a v2 exists; a short race
+      # right after a release (before the tag moves) and one unanswered regression report are the
+      # known exceptions, and a stray bump is drift the next wave rolls back — the kit's
+      # dependabot.yml also ignores every minor/patch action bump outright. What the pin bought:
+      # `v1` is a mutable tag a bot repoints, and the CLI install below is already unpinned from the
+      # same vendor, so the SHA covered one of two channels into a job holding the OAuth token — a
+      # small reduction, not none. The trade: a regression in a new action release reaches every
+      # repo on its next run, and holding the fleet on a known version means pinning a SHA here and
+      # waving.
       # Path is fixed because runs-on is ubuntu-latest (GitHub-hosted) → $HOME is always /home/runner.
       - name: Install Claude Code (latest stable, resilient)
         run: |
@@ -307,8 +321,8 @@ jobs:
           [ -x "$HOME/.local/bin/claude" ] || { echo "::error::Claude Code install failed after 5 attempts"; exit 1; }
           "$HOME/.local/bin/claude" --version
       - id: claude
-        uses: anthropics/claude-code-action@c81e3bc69d1b18badbb63ba39581218f02421678 # v1.0.201
-        # anthropics/claude-code-action#1499 (open; the `break` is still in v1.0.220): the action stops
+        uses: anthropics/claude-code-action@v1
+        # anthropics/claude-code-action#1499 (open; the `break` was still in v1.0.220 on 2026-09-10): the action stops
         # reading the SDK stream at the FIRST result message, so a run that backgrounds subagents and
         # ends its turn to wait for them exits green with the work orphaned. Avara #195 pushed its
         # branch and never reached `gh pr create`. With this set, the background option is not offered
@@ -400,9 +414,9 @@ jobs:
           # install + use the inline-comment poster — naming it is what makes the action install that MCP
           # server (src/mcp/install-mcp-server.ts); omitting it is exactly what silently broke posting on
           # the reviewer rail. CAVEAT: WebSearch/WebFetch are HARDCODED default-disallowed by the action
-          # (anthropics/claude-code-action#690, still open) — no claude_args override at this SHA, so
-          # they're omitted (deep web research lives on the executor leg's bare `claude -p`). Re-add only if
-          # #690 ships a fix and this SHA is bumped.
+          # (anthropics/claude-code-action#690, still open) — no claude_args override as of v1.0.220
+          # (2026-09-10), so they're omitted. Re-add when #690 ships a fix: the action floats on `v1`, so
+          # the fix arrives on its own and this comment is the only gate.
           # CAVEAT 2: Figma MCP cannot run on this rail — mcp.figma.com needs an interactive OAuth consent
           # that neither CI credential can give, and no --allowedTools edit changes that. Triage reads the
           # design and puts what the implementer needs in the issue body instead
@@ -526,7 +540,7 @@ jobs:
       # tooling (env empty) and on runs where the tool never fired (if-no-files-found: ignore).
       - name: Upload Shopify audit artifact
         if: ${{ always() && env.SHOPIFY_AUDIT_DIR != '' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@v7
         with:
           name: shopify-audit-${{ env.SHOPIFY_STORE_NAME }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.SHOPIFY_AUDIT_DIR }}
