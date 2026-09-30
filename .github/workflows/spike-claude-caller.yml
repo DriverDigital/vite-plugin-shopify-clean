@@ -1,0 +1,21 @@
+name: Spike claude caller
+
+# Throwaway Phase 0 spike caller (DriverDigital/workflows docs/reusable-conversion-scope.md).
+# Keys on a [spike-claude] marker, never @claude, so the real implementer stays out of it.
+
+on:
+  issues:
+    types: [opened]
+  workflow_dispatch:
+
+jobs:
+  spike:
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.issue.title, '[spike-claude]') }}
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    uses: DriverDigital/workflows/.github/workflows/spike-claude.yml@97d40ff3cf2e95edcbca405ab386705cbbf6da0a
+    secrets: inherit
