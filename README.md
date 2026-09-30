@@ -112,3 +112,4 @@ MIT
 Built and maintained with ♥️ by [Driver Digital](https://www.driver-digital.com) 
 
 Originally forked from [@by-association-only/vite-plugin-shopify-clean](https://github.com/dan-gamble/vite-plugin-shopify-clean) - big thanks to [Dan Gamble](https://github.com/dan-gamble) for his work on the original.
+<!-- implementer canary v1.17.0 -->
