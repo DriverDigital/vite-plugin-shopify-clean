@@ -1,0 +1,33 @@
+name: Bonsai task link
+
+# Fails a PR whose body names no Bonsai task: an app.hellobonsai.com task URL, or a
+# `Bonsai task: none` line. Dependabot PRs are exempt.
+
+on:
+  pull_request:
+    # synchronize/reopened as well: a required check belongs to the head SHA, so without them a push
+    # leaves the new head waiting on a check that never runs.
+    types: [opened, edited, synchronize, reopened]
+
+permissions: {}
+
+jobs:
+  bonsai-link:
+    # A skipped job satisfies a required check, which is what the exemption needs.
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: PR body names its Bonsai task
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          uuid='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}([^0-9a-z]|$)'
+          # A task URL (/tasks/<uuid>, or the board form ?task=<uuid>), or a `Bonsai task: none` line.
+          url="(^|https?://|[^[:alnum:]./-])app\.hellobonsai\.com/(tasks/|[^[:space:]]*[?&]task=)$uuid"
+          none='^[[:space:]>*_-]*Bonsai task:[[:space:]*_`]*none([^[:alnum:]]|$)'
+          if grep -qiE "$url|$none" <<<"$BODY"; then
+            echo "Bonsai task named"; exit 0
+          fi
+          echo "::error::Name the Bonsai task in the PR body: a line reading 'Bonsai task: <the app.hellobonsai.com/tasks/ URL>', or 'Bonsai task: none' when there is no task."
+          exit 1

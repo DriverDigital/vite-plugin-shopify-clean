@@ -2,11 +2,10 @@
 <!-- what changed and why -->
 
 ## Bonsai task
-<!-- LINK the originating Bonsai GitHub issue so the pipeline dispatcher can resolve the Bonsai task —
-     add a line like "Closes #123" below (the issue body carries the Bonsai task URL the workflow
-     reads). The dispatcher resolves the linked issue via the PR's closing reference, so a copied
-     task URL here is not needed. AI-opened PRs are linked automatically via the issue's development
-     branch. -->
+Bonsai task: <url> | none
+<!-- Replace the line above with the app.hellobonsai.com/tasks/ URL, or with `Bonsai task: none` and a
+     word of why. The bonsai-link check fails the PR until one is there. Link the originating issue
+     too (`Closes #123`) — that is how the pipeline dispatcher resolves the task. -->
 
 ## Testing
 <!-- how this was verified -->

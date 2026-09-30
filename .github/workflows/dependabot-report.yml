@@ -1,14 +1,12 @@
 name: Dependabot report
 
-# CALLER STUB — install into a pipeline repo's .github/workflows/.
-# Calls the central PRIVILEGED report reusable on `workflow_run` (after the
-# 'Dependabot validate' workflow completes). Passes the triggering-run context
-# explicitly by design — the reusable could read github.event.workflow_run itself,
-# but its provenance assertion is written against these inputs — + inherits secrets.
+# Caller stub: after Dependabot validate completes, the privileged reusable reads its build log,
+# posts a verdict and requests a reviewer. The run context goes in as inputs because the reusable's
+# provenance check is written against them.
 
 on:
   workflow_run:
-    workflows: ["Dependabot validate"] # MUST equal the validate stub's `name:` exactly
+    workflows: ["Dependabot validate"] # must equal the validate stub's name: exactly
     types: [completed]
 
 permissions:
@@ -21,7 +19,7 @@ concurrency:
 
 jobs:
   report:
-    uses: DriverDigital/workflows/.github/workflows/dependabot-report.yml@ff3ff344c7f8ae3bdcfed9a9b643f462541a603c # v1.16.0
+    uses: DriverDigital/workflows/.github/workflows/dependabot-report.yml@359505a78bea40cd6055ea5c933d7aff63a733cc # v1.17.0
     with:
       triggering-run-id: ${{ github.event.workflow_run.id }}
       head-repository: ${{ github.event.workflow_run.head_repository.full_name }}
