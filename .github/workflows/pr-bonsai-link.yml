@@ -1,7 +1,7 @@
 name: Bonsai task link
 
-# Fails a PR whose body names no Bonsai task: an app.hellobonsai.com task URL, or a
-# `Bonsai task: none` line. Dependabot PRs are exempt.
+# Checks the Bonsai task link in a PR body: a PR that mentions no Bonsai link at all is skipped
+# (grey, never red — most human PRs have no ticket), one that carries a link must carry a task URL.
 
 on:
   pull_request:
@@ -13,8 +13,9 @@ permissions: {}
 
 jobs:
   bonsai-link:
-    # A skipped job satisfies a required check, which is what the exemption needs.
-    if: github.event.pull_request.user.login != 'dependabot[bot]'
+    # Skipped is the neutral outcome: no Bonsai mention, nothing to check. The regex below is the
+    # precise test; this is only the coarse gate that keeps the job grey instead of red.
+    if: contains(github.event.pull_request.body, 'hellobonsai.com')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -29,5 +30,5 @@ jobs:
           if grep -qiE "$url|$none" <<<"$BODY"; then
             echo "Bonsai task named"; exit 0
           fi
-          echo "::error::Name the Bonsai task in the PR body: a line reading 'Bonsai task: <the app.hellobonsai.com/tasks/ URL>', or 'Bonsai task: none' when there is no task."
+          echo "::error::The Bonsai link in the PR body is not a task URL. Use the task's app.hellobonsai.com/tasks/<uuid> URL (or its board link with ?task=<uuid>)."
           exit 1
