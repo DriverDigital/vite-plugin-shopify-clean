@@ -33,5 +33,5 @@ jobs:
       issues: write
       id-token: write
       actions: read
-    uses: DriverDigital/workflows/.github/workflows/claude.yml@359505a78bea40cd6055ea5c933d7aff63a733cc # v1.17.0
+    uses: DriverDigital/workflows/.github/workflows/claude.yml@85f15787eb053ff0063b2588fd5ce4cd6ead5d33 # v1.18.0
     secrets: inherit
