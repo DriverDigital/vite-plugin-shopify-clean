@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 @.github/claude-standards.md
 
+State of play (what's in flight, what's waiting on upstream) is in `docs/HANDOFF.md`; keep it current.
+
 ## What this is
 
 A published npm package (`@driver-digital/vite-plugin-shopify-clean`) — a single Vite plugin that removes stale hashed assets from a Shopify theme's `assets/` folder. It's a maintained fork of `@by-association-only/vite-plugin-shopify-clean` and is meant to run alongside Barrel's `vite-plugin-shopify`. The entire implementation is `src/index.ts` + `src/options.ts`; everything else is build, test, release, and CI scaffolding.
