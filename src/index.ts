@@ -1,3 +1,5 @@
+// Vite plugin that deletes stale hashed assets from a Shopify theme's assets/ folder by diffing
+// Vite manifests across builds. Runs alongside vite-plugin-shopify; needs build.emptyOutDir: false.
 import { existsSync, promises as fs } from 'fs'
 import path from 'path'
 
@@ -56,7 +58,6 @@ export default function shopifyClean (options: VitePluginShopifyCleanOptions = {
       const manifest = JSON.parse(await fs.readFile(manifestFile, 'utf-8')) as Manifest
       const filesInManifest = getFilesInManifest(manifest)
 
-      // Store previous manifest files for writeBundle comparison
       previousManifestFiles = new Set(filesInManifest.map(f => path.basename(f)))
 
       if (this.meta.watchMode && !buildStartFirstRun) {
@@ -94,7 +95,6 @@ export default function shopifyClean (options: VitePluginShopifyCleanOptions = {
       const manifest = JSON.parse(manifestAsset.source.toString()) as Manifest
       const currentManifestFiles = new Set(getFilesInManifest(manifest).map(f => path.basename(f)))
 
-      // Delete files that were in the previous manifest but not in the current one
       const filesToDelete = [...previousManifestFiles].filter(f => !currentManifestFiles.has(f))
 
       await Promise.all(filesToDelete.map(async file => {
@@ -102,7 +102,6 @@ export default function shopifyClean (options: VitePluginShopifyCleanOptions = {
         await safeUnlink(location)
       }))
 
-      // Update previous manifest files for next comparison
       previousManifestFiles = currentManifestFiles
     },
   }
@@ -129,15 +128,12 @@ export function getFilesInManifest (manifest: Manifest): string[] {
       const shouldInclude = !path.posix.basename(key).startsWith('_') || filesListedInImports.has(key)
 
       if (shouldInclude) {
-        // Add main JS file
         files.push(block.file)
 
-        // Add associated CSS files (fixes Issue #14)
         if ('css' in block && Array.isArray(block.css)) {
           files.push(...block.css)
         }
 
-        // Add associated asset files (images, fonts, etc.)
         if ('assets' in block && Array.isArray(block.assets)) {
           files.push(...block.assets)
         }
