@@ -54,7 +54,7 @@ Resolved in `src/options.ts` with defaults `manifestFileName: '.vite/manifest.js
 ## Dependencies
 
 - `typescript` is held at `~6.0.3` **temporarily**: TypeScript 7 is outside @typescript-eslint's supported peer range (`>=4.8.4 <6.1.0`) and breaks `npm ci`. This is a wait for typescript-eslint to catch up, not a policy — once its peer range admits TS 7, move to `^7`, drop the typescript `ignore` in `.github/dependabot.yml`, and drop this note.
-- `vitest` is held at `^4`: vitest 5 requires Node ≥22.12, but CI and `engines` still cover Node 20. Move to `^5` and drop its `ignore` in `.github/dependabot.yml` when Node 20 support goes (#109).
+- Node support follows Vite: Node 20 stays in `engines` and CI until a Vite release drops it, then goes in a major (#117). `vitest` is held at `^4` until then because vitest 5 requires Node ≥22.12.
 
 ## Release / branching
 
