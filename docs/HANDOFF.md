@@ -5,7 +5,7 @@ State of play as of 2026-10-06. Conventions live in `CLAUDE.md`; to-dos are open
 ## Where things are
 
 - **2.0.2 is published** to npm (`latest`) and has a GitHub release. It contains only dev-dependency updates and README fixes.
-- **Nothing is in flight.** `main` is clean, there are no open PRs, and `develop` and `.project/todo.md` are gone.
+- **Nothing is in flight.** `main` is clean, there are no open PRs, and the `develop` branch is gone.
 
 ## Waiting on something outside this repo
 
