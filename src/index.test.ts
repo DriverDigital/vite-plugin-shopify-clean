@@ -6,10 +6,6 @@ import type { Manifest, Rollup } from 'vite'
 
 import shopifyClean, { getFilesInManifest } from './index'
 
-// TODO: Add test for custom manifestFileName option
-// TODO: Add test for missing assets directory warning in buildStart
-// TODO: Add test for safeUnlink error handling (non-ENOENT errors should warn but not throw)
-
 // Helper to create a mock plugin context
 function createMockPluginContext(watchMode = false) {
   return {
