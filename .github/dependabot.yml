@@ -10,6 +10,13 @@ updates:
     directory: "/"
     schedule:
       interval: "monthly"
+    # TS 7 is outside @typescript-eslint's peer range and breaks npm ci; drop once it isn't (#103).
+    # Vitest 5 drops Node 20, which CI and engines still cover; drop with the Node move (#109).
+    ignore:
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "vitest"
+        update-types: ["version-update:semver-major"]
     # Raise all npm pull requests with assignees
     assignees:
       - "mcarter-astronautdev"

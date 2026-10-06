@@ -16,7 +16,7 @@ Why you might need this: when Vite emits hashed filenames (e.g., `app-abc123.js`
 
 - Cleans pre-existing assets listed in the last manifest at the start of a build.
 - Removes stale assets after each build by comparing the previous manifest to the current one — in both dev (watch) and production builds.
-- Tracks JS, CSS, and asset files (images, fonts, etc.) from the manifest.
+- Tracks JS, CSS, and asset files (images, fonts, etc.) from the manifest. Sourcemap (`.map`) files aren't in the manifest, so they aren't cleaned.
 - Uses Rollup/Vite `watchMode` (no env var required) to control watch-specific behavior.
 - Works with the Shopify theme assets directory structure.
 - Minimal configuration; sensible defaults.
@@ -78,7 +78,7 @@ interface VitePluginShopifyCleanOptions {
   manifestFileName?: string
 
   /**
-   * Shopify theme root directory (relative to project root).
+   * Shopify theme root directory (relative to the directory Vite is run from).
    * Defaults to `./`.
    */
   themeRoot?: string
