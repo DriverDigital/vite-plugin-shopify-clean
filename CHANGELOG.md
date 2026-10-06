@@ -1,5 +1,11 @@
 # @driver-digital/vite-plugin-shopify-clean
 
+## 2.0.2 - 2026-10-06 - Maintenance
+
+- Update dev dependencies to their latest in-range versions; npm audit is clean (dev-scope only, the published package is unaffected).
+- README: note that sourcemap (`.map`) files aren't cleaned, and that `themeRoot` resolves from the directory Vite runs in.
+- Hold TypeScript 7 and Vitest 5 until typescript-eslint and the Node 20 drop allow them.
+
 ## 2.0.1 - 2026-08-20 - Security and dependency maintenance
 
 - Resolve all six open Dependabot security alerts (postcss, brace-expansion, flatted, esbuild — dev-scope only; the published package was never affected).
