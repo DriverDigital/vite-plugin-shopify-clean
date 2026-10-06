@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+@.github/claude-standards.md
+
 ## What this is
 
 A published npm package (`@driver-digital/vite-plugin-shopify-clean`) — a single Vite plugin that removes stale hashed assets from a Shopify theme's `assets/` folder. It's a maintained fork of `@by-association-only/vite-plugin-shopify-clean` and is meant to run alongside Barrel's `vite-plugin-shopify`. The entire implementation is `src/index.ts` + `src/options.ts`; everything else is build, test, release, and CI scaffolding.
@@ -51,10 +53,11 @@ Resolved in `src/options.ts` with defaults `manifestFileName: '.vite/manifest.js
 
 ## Dependencies
 
-- `typescript` is held at `~6.0.3` **temporarily**: TypeScript 7 is outside @typescript-eslint's supported peer range (`>=4.8.4 <6.1.0`) and breaks `npm ci`. This is a wait for typescript-eslint to catch up, not a policy — once its peer range admits TS 7, move to `^7` and drop this note. CI only runs on `main`, so a dependabot PR bumping typescript to 7.x won't fail visibly before merge — check the peer range before merging one.
+- `typescript` is held at `~6.0.3` **temporarily**: TypeScript 7 is outside @typescript-eslint's supported peer range (`>=4.8.4 <6.1.0`) and breaks `npm ci`. This is a wait for typescript-eslint to catch up, not a policy — once its peer range admits TS 7, move to `^7`, drop the typescript `ignore` in `.github/dependabot.yml`, and drop this note.
+- `vitest` is held at `^4`: vitest 5 requires Node ≥22.12, but CI and `engines` still cover Node 20. Move to `^5` and drop its `ignore` in `.github/dependabot.yml` when Node 20 support goes (#109).
 
 ## Release / branching
 
-- **`main`-only flow.** PRs (features, deps) merge into `main`; releases are cut from `main`. The `develop` branch still exists on origin but is **intentionally dormant** — don't target it, don't delete it, don't reintroduce it into workflows or config.
+- **`main`-only flow.** PRs (features, deps) merge into `main`; releases are cut from `main`. There is no `develop` branch; don't reintroduce one into workflows or config.
 - Full release procedure lives in `.project/publish.md` — follow it step by step. `npm run verify-package` (checks build, export paths, CJS+ESM imports, type compilation, `npm pack` contents, engine/extension consistency) and `npm run test:sandbox` (packs the plugin, installs into a sibling `../sandbox-vite-plugin-shopify-clean` checkout, simulates stale files, runs a real `vite build`, confirms they're gone) are both gates before publishing. `npm publish` itself is run by the user.
 - This repo has an `upstream` remote pointing at the original fork, which confuses `gh` — always pass `--repo DriverDigital/vite-plugin-shopify-clean` to `gh release` commands.
