@@ -16,5 +16,5 @@ concurrency:
 
 jobs:
   validate:
-    uses: DriverDigital/workflows/.github/workflows/dependabot-validate.yml@85f15787eb053ff0063b2588fd5ce4cd6ead5d33 # v1.18.0
+    uses: DriverDigital/workflows/.github/workflows/dependabot-validate.yml@b6a6f8dc61fbe8bcfc71d21878d5577051774a6f # v1.19.0
     # No secrets: line; this job runs untrusted code.
