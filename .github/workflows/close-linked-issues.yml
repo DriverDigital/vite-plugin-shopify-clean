@@ -1,0 +1,49 @@
+name: Close linked issues
+
+# Closes the issues a merged PR names with a closing keyword (`Closes #12`, `fixes #12`, ...) when it
+# merged into a main-* branch (Palmers' country branches). GitHub honours those keywords only on the
+# default branch, so a PR into main-in would otherwise leave its issue open. Any other base, such as a
+# stacked feature branch, closes nothing.
+
+on:
+  pull_request:
+    types: [closed]
+    branches: ["main-*"]
+
+permissions: {}
+
+jobs:
+  close:
+    if: github.event.pull_request.merged
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Close the issues the PR body names
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+          PR: ${{ github.event.pull_request.number }}
+          # The default token, not AGENTS_GH_PAT: its close event cannot wake another workflow.
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # Bare same-repo #N only: owner/repo#N names another repository. HTML comments and code
+          # (fenced, indented, inline) are stripped first, as GitHub does; the PR template's own
+          # comment carries an example keyword. Over-stripping only leaves an issue open.
+          nums=$(perl -0pe 's/<!--.*?-->//gs; s/^(```|~~~).*?^\1//gms; s/^(?: {4}|\t).*$//gm; s/`[^`\n]*`//g' <<<"$BODY" \
+            | grep -oiE '(^|[^[:alnum:]/_.-])(close[sd]?|fix(e[sd])?|resolve[sd]?):?[[:space:]]+#[0-9]+' \
+            | grep -oE '[0-9]+$' | sort -un || true)
+          [ -n "$nums" ] || { echo "No closing keywords"; exit 0; }
+          for n in $nums; do
+            # A PR number shares the issue number space, and closing it would close the PR.
+            # Only a missing issue is skipped; any other failure fails the run, and a re-run is safe
+            # because issues it already closed are skipped.
+            if ! info=$(gh api "repos/$GH_REPO/issues/$n" --jq '(if .pull_request then "pr" else "issue" end) + " " + .state' 2>err); then
+              grep -qE 'HTTP (404|410)' err && { echo "#$n: not found; skipped"; continue; }
+              cat err >&2; exit 1
+            fi
+            [ "$info" = "issue open" ] || { echo "#$n: $info; skipped"; continue; }
+            gh issue close "$n" --reason completed --comment "Closed by #$PR, merged into \`${GITHUB_BASE_REF}\`."
+          done

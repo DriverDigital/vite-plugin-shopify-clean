@@ -10,6 +10,13 @@ file from the PR head, so anything load-bearing belongs in `CLAUDE.md` or `.clau
 - **Commit messages** — Natural language, not strict conventional-commit formatting. Succinct: what
   changed, plus any rationale a senior developer would need later. No history, narratives, or
   who-decided-what.
+- **Commit authorship** — Commits carry the name and email of the person running the session, so the
+  team can see who worked on a repo or PR. No `Co-Authored-By` trailer. A cloud session's git identity
+  is Claude, so set both on each commit and turn signing off:
+  `git -c user.name="<name>" -c user.email="<email>" -c commit.gpgsign=false commit …`. The session
+  signs with Anthropic's key, which GitHub marks Unverified under a person's name. Ask for the name and
+  email if you don't have them. The implementer's issue runs are the exception: they commit as
+  `claude[bot]`.
 - **Code comments** — Code should be self-describing; comments are written as one senior engineer to
   another. A comment is either a *guidebook* (what this is, where it is used, how it works, what it is
   bound to) or *provenance* (which Figma frame, which ticket, which date, who decided). Guidebooks
@@ -32,21 +39,38 @@ file from the PR head, so anything load-bearing belongs in `CLAUDE.md` or `.clau
     it stays diffable against the source.
   - *Disabled code is a code call.* Commented-out markup and debug blocks, with their reason line,
     stay until a code change removes them.
-  - *Say it once.* History and cross-cutting context live in `CLAUDE.md`; a mechanism is explained at
-    the code that implements it, never replaced by a pointer; a rationale repeated within a file goes.
+  - *Say it once.* Cross-cutting context lives in `CLAUDE.md`, and history in git and the PRs; a
+    mechanism is explained at the code that implements it, never replaced by a pointer; a rationale
+    repeated within a file goes.
 - **To-dos** — One-off to-dos are GitHub issues labelled `todo` on the repo they belong to. The
   driver-skills plugin lists a repo's open ones at session start, and its todo-capture skill files new
   ones, including cross-repo handoffs with a `from:` line. Close the issue when done. A gitignored
   `CLAUDE.local.md` is for private to-dos and personal capture only, never for work the team should
   see.
-- **Branches and pull requests** — Macroscope reviews a pull request at most three times, and every
-  push to an open PR spends one. A session works on one feature branch, commits each piece of work
-  separately (even when they touch unrelated things) and pushes to the branch as often as it likes,
-  then opens one PR at the end, when the work is ready for review. A PR needed sooner is a draft
-  (Macroscope does not review drafts). Once a PR is open, collect fixes locally and push them
-  together. PRs land with a merge commit, never a squash, so each commit survives on `main`.
+- **`docs/HANDOFF.md`** — The current state only, rewritten in place each session, never a dated
+  log: what is in flight, what is blocked, what is next, and which decisions are open. It points at
+  open `todo` issues rather than repeating them. It never holds dated session entries, verification
+  records, run ids, completed work, or who decided what; git and the PRs keep that history. A fact
+  that stays true and needed (an account, a secret's home, an operating step) moves to the doc that
+  owns it, such as `CLAUDE.md` or `README.md`.
+- **Branches and pull requests** — Macroscope reviews a pull request at most three times, every
+  push to a published PR spends one, and it does not review drafts. A session works on one feature
+  branch, commits each piece of work separately (even when they touch unrelated things) and pushes
+  to the branch as often as it likes, then opens one PR at the end as a draft (`gh pr create
+  --draft`). It never marks the PR ready for review: the person running the session publishes it, or
+  says to, once they have reviewed it. Once a PR is published, collect fixes locally and push them
+  together. The implementer's issue runs open a published PR, since Macroscope's review and the
+  revise loop run unattended. PRs land with a merge commit, never a squash, so each commit survives on `main`.
   Deleting a head branch once its PR merges is preferred, but GitHub is not configured to do this on every repository, since some PR authors need to keep longer-lived branches in some repos: delete a branch you created for your own PR once it merges, and
   propose cleanup of other stale branches rather than deleting them.
+- **Theme editor changes on a PR preview** — On a Shopify theme repo, a branch with an open PR has
+  a preview theme `DRIVER/<branch>` (a name over 50 characters is shortened, so find it with
+  `shopify theme list`). Every push re-uploads the whole theme and overwrites anything changed in
+  that theme's editor, so before pushing, pull `templates/*.json`, `sections/*.json` and
+  `config/settings_data.json` from the preview into a scratch folder. Where a file differs from the
+  last pushed commit and the branch has not changed it since, take the preview's version and
+  commit it ("Pull theme editor changes"). Where both changed, stop and ask. Skip this when the CLI
+  has no access to the store, and say so.
 - **`ponytail:` comments** — One line naming a ceiling someone could realistically hit (e.g. a
   hardcoded limit that mirrors a setting elsewhere, or an unpaginated cap). Other simplifications
   need no comment.
