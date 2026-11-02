@@ -1,0 +1,48 @@
+name: Lint workflows
+
+# Kit file: actionlint and shellcheck over this repo's .github/workflows/. A YAML or shell error
+# otherwise surfaces only as a startup_failure, with no check run and no notification. The job id,
+# `actionlint`, is the required-check context.
+
+on:
+  pull_request:
+  # PRs into any branch, pushes to main only. The wave replaces this file whole, so do not edit it per repo.
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      # A checksummed release rather than the upstream action, which the org allowlist would need
+      # to approve. Dependabot cannot see this pair, so bump VERSION and SHA256 together.
+      - name: Install actionlint
+        env:
+          VERSION: 1.7.12
+          SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          set -euo pipefail
+          curl -fsSL --max-time 120 -o actionlint.tar.gz \
+            "https://github.com/rhysd/actionlint/releases/download/v${VERSION}/actionlint_${VERSION}_linux_amd64.tar.gz"
+          echo "${SHA256}  actionlint.tar.gz" | sha256sum -c -
+          tar -xzf actionlint.tar.gz actionlint
+
+      # No paths: actionlint lints every workflow the repo has, not only the kit's.
+      - name: Lint .github/workflows/
+        env:
+          # SC2015 flags the `cond && action || true` set -e idiom. Newer shellcheck no longer does,
+          # but the runner's copy is older and actionlint fails on its INFO findings.
+          SHELLCHECK_OPTS: --exclude=SC2015
+        run: |
+          set -euo pipefail
+          ./actionlint -color
