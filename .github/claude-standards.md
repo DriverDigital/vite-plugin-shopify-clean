@@ -67,7 +67,13 @@ file from the PR head, so anything load-bearing belongs in `CLAUDE.md` or `.clau
   to the branch as often as it likes, then opens one PR at the end as a draft (`gh pr create
   --draft`). It never marks the PR ready for review: the person running the session publishes it, or
   says to, once they have reviewed it. Once a PR is published, collect fixes locally and push them
-  together. The implementer's issue runs open a published PR, since Macroscope's review and the
+  together. One exception, for an org admin, who can bypass branch protection: a minor docs-only
+  change may go straight to `main` when no feature branch is open, or when it concerns `main` and not
+  the branch's work; anyone else opens a PR for it. When the session's work is on a
+  feature branch, its docs updates, the end-of-session `docs/HANDOFF.md` included, are committed to
+  that branch and ride in its PR. A docs change that alters how the repo is understood or how future
+  work is done, or spans many files, always goes in a PR, so its conflicts and contradictions get
+  reviewed. The implementer's issue runs open a published PR, since Macroscope's review and the
   revise loop run unattended. PRs land with a merge commit, never a squash, so each commit survives on `main`.
   Deleting a head branch once its PR merges is preferred, but GitHub is not configured to do this on every repository, since some PR authors need to keep longer-lived branches in some repos: delete a branch you created for your own PR once it merges, and
   propose cleanup of other stale branches rather than deleting them.
@@ -84,6 +90,18 @@ file from the PR head, so anything load-bearing belongs in `CLAUDE.md` or `.clau
   file differs from the last pushed commit and the branch has not changed it since, take the preview's
   version and commit it ("Pull theme editor changes"). Where both changed, stop and ask. Skip this
   when the CLI has no access to the store, and say so.
+- **Figma designs on a PR** — When a PR implements a Figma design, put the design link in its
+  description and add the `figma` label (`gh pr create --label figma`, or `gh pr edit <n> --add-label
+  figma`): Macroscope runs its design fidelity check only on PRs with that label. If you cannot add
+  it, tell the person to. The check reads a link in the PR description only when an organisation
+  member opened the PR; the implementer's link counts through its issue. For anyone else, put the
+  link on the Bonsai ticket.
+- **Client team memory** — A client repo's `CLAUDE.md` links the client's folder in the Clients
+  shared drive, where driver-skills' `team-memory` keeps the client's CLAUDE, HANDOFF, MEMORY and
+  ARTIFACTS docs; each repo adds its own link. Read them for client context when useful. When a
+  session produces something the team needs before the next client meeting (what is ready to deploy,
+  which PRs wait for review), add it to that HANDOFF doc with `team-memory`; without the Google Drive
+  and Docs connectors, tell the person what to add. The implementer's issue runs skip this.
 - **`ponytail:` comments** — One line naming a ceiling someone could realistically hit (e.g. a
   hardcoded limit that mirrors a setting elsewhere, or an unpaginated cap). Other simplifications
   need no comment.
