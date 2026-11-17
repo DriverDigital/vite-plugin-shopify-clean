@@ -23,6 +23,11 @@ async function safeUnlink (location: string): Promise<void> {
   }
 }
 
+// Vite doesn't list sourcemaps in the manifest, so each deleted asset takes its `.map` with it.
+async function removeAsset (location: string): Promise<void> {
+  await Promise.all([safeUnlink(location), safeUnlink(`${location}.map`)])
+}
+
 export default function shopifyClean (options: VitePluginShopifyCleanOptions = {}): Plugin {
   const resolvedOptions = resolveOptions(options)
 
@@ -69,7 +74,7 @@ export default function shopifyClean (options: VitePluginShopifyCleanOptions = {
       await Promise.all(filesInManifest.map(async file => {
         const base = path.basename(file)
         const location = path.join(assetsDir, base)
-        await safeUnlink(location)
+        await removeAsset(location)
       }))
     },
 
@@ -99,7 +104,7 @@ export default function shopifyClean (options: VitePluginShopifyCleanOptions = {
 
       await Promise.all(filesToDelete.map(async file => {
         const location = path.join(assetsDir, file)
-        await safeUnlink(location)
+        await removeAsset(location)
       }))
 
       previousManifestFiles = currentManifestFiles

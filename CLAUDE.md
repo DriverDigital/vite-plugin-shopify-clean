@@ -33,7 +33,7 @@ CI (`.github/workflows/ci.yml`) runs lint → build → test on Node 22/24, and 
 
 ## Architecture
 
-The plugin decides what to delete by **comparing Vite manifests across builds** — never by regex-matching hashed filenames (an earlier regex approach was removed in 1.0.4; don't reintroduce it). All cleanup keys off files listed in the manifest, compared by `path.basename`.
+The plugin decides what to delete by **comparing Vite manifests across builds** — never by regex-matching hashed filenames (an earlier regex approach was removed in 1.0.4; don't reintroduce it). All cleanup keys off files listed in the manifest, compared by `path.basename`; each deleted file's `<file>.map` sibling goes with it, since Vite never lists sourcemaps in the manifest.
 
 Two hooks, both defined in `src/index.ts`:
 
@@ -47,7 +47,7 @@ State that makes this work correctly:
 
 `getFilesInManifest` (exported, unit-tested directly) flattens a manifest into files to track: each entry's `file`, plus its `css[]` and `assets[]` arrays. Underscore-prefixed entries (`_shared.ts`) are **excluded unless they're imported by another entry** — orphaned `_`-chunks are skipped. When touching this function, preserve that import-reachability rule; the test `excludes underscore-prefixed chunks unless imported` covers it.
 
-Deletion always goes through `safeUnlink`, which swallows `ENOENT` (file already gone — no TOCTOU `existsSync` check) and warns-but-doesn't-throw on any other error, so cleanup never fails a build.
+Deletion always goes through `removeAsset` → `safeUnlink`, which swallows `ENOENT` (file already gone — no TOCTOU `existsSync` check) and warns-but-doesn't-throw on any other error, so cleanup never fails a build.
 
 ## Options
 
