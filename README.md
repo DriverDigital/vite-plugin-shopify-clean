@@ -92,7 +92,7 @@ Defaults used by the plugin:
 
 ## How it works
 
-The plugin tracks files listed in Vite's manifest (JS, CSS, and asset files like images and fonts) and uses manifest comparison to determine what to clean.
+The plugin tracks files listed in Vite's manifest (JS, CSS, and asset files like images and fonts) and uses manifest comparison to determine what to clean. Whenever it deletes a file, it also deletes that file's sourcemap (`<file>.map`), which Vite doesn't list in the manifest.
 
 - Build start (`buildStart`)
   - If `assets/.vite/manifest.json` exists (or your configured path), the plugin reads the previously emitted assets and removes them from `assets/` before a fresh build. This prevents stale files from lingering across builds.
