@@ -56,7 +56,7 @@ Resolved in `src/options.ts` with defaults `manifestFileName: '.vite/manifest.js
 ## Dependencies
 
 - `typescript` is held at `~6.0.3` **temporarily**: TypeScript 7 is outside @typescript-eslint's supported peer range (`>=4.8.4 <6.1.0`) and breaks `npm ci`. This is a wait for typescript-eslint to catch up, not a policy — once its peer range admits TS 7, move to `^7`, drop the typescript `ignore` in `.github/dependabot.yml`, and drop this note.
-- Node support follows Barrel's `vite-plugin-shopify`, since every consumer runs both: `engines.node` matches its minimum, and the `--target node<N>` in `build`/`watch` matches `engines` (`verify-package` checks this). Raising the minimum is a major release. Building this repo needs Node ≥22.18 (tsup 9); consumers only need what `engines` says.
+- Node support follows Barrel's `vite-plugin-shopify`, since every consumer runs both: `engines.node` matches its minimum, and the `--target node<N>` in `build`/`watch` matches `engines` (`verify-package` checks this). Raising the minimum is a major release. Building this repo needs Node `^22.18 || >=24.11` (tsup 9); consumers only need what `engines` says.
 
 ## Release / branching
 
