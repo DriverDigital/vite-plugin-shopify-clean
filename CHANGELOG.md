@@ -1,5 +1,12 @@
 # @driver-digital/vite-plugin-shopify-clean
 
+## 3.0.0 - 2026-11-18 - Drop Node 20; delete sourcemaps with their assets
+
+- **BREAKING:** Drop Node 20 support. Now requires Node `>=22.12.0`, matching Barrel's `vite-plugin-shopify` 5.
+- Delete each removed asset's sourcemap (`<file>.map`) along with it.
+- Update dev dependencies (tsup 9, vitest 5, typescript-eslint 8.73); clears the minimatch alert. `npm audit` still reports picomatch (dev-only, no patched release yet); `npm audit --omit=dev` is clean.
+- Fix the `watch-upstream` workflow, and give every workflow least-privilege token permissions.
+
 ## 2.0.2 - 2026-10-06 - Maintenance
 
 - Update dev dependencies to their latest in-range versions; npm audit is clean (dev-scope only, the published package is unaffected).
