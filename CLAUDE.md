@@ -29,11 +29,11 @@ npx vitest run src/index.test.ts
 npx vitest run -t "deletes files removed from manifest"   # by test name
 ```
 
-CI (`.github/workflows/ci.yml`) runs lint → build → test on Node 20/22/24, and **only triggers on `main`**.
+CI (`.github/workflows/ci.yml`) runs lint → build → test on Node 22/24, and **only triggers on `main`**.
 
 ## Architecture
 
-The plugin decides what to delete by **comparing Vite manifests across builds** — never by regex-matching hashed filenames (an earlier regex approach was removed in 1.0.4; don't reintroduce it). All cleanup keys off files listed in the manifest, compared by `path.basename`.
+The plugin decides what to delete by **comparing Vite manifests across builds** — never by regex-matching hashed filenames (an earlier regex approach was removed in 1.0.4; don't reintroduce it). All cleanup keys off files listed in the manifest, compared by `path.basename`; each deleted file's `<file>.map` sibling goes with it, since Vite never lists sourcemaps in the manifest.
 
 Two hooks, both defined in `src/index.ts`:
 
@@ -47,7 +47,7 @@ State that makes this work correctly:
 
 `getFilesInManifest` (exported, unit-tested directly) flattens a manifest into files to track: each entry's `file`, plus its `css[]` and `assets[]` arrays. Underscore-prefixed entries (`_shared.ts`) are **excluded unless they're imported by another entry** — orphaned `_`-chunks are skipped. When touching this function, preserve that import-reachability rule; the test `excludes underscore-prefixed chunks unless imported` covers it.
 
-Deletion always goes through `safeUnlink`, which swallows `ENOENT` (file already gone — no TOCTOU `existsSync` check) and warns-but-doesn't-throw on any other error, so cleanup never fails a build.
+Deletion always goes through `removeAsset` → `safeUnlink`, which swallows `ENOENT` (file already gone — no TOCTOU `existsSync` check) and warns-but-doesn't-throw on any other error, so cleanup never fails a build.
 
 ## Options
 
@@ -56,7 +56,7 @@ Resolved in `src/options.ts` with defaults `manifestFileName: '.vite/manifest.js
 ## Dependencies
 
 - `typescript` is held at `~6.0.3` **temporarily**: TypeScript 7 is outside @typescript-eslint's supported peer range (`>=4.8.4 <6.1.0`) and breaks `npm ci`. This is a wait for typescript-eslint to catch up, not a policy — once its peer range admits TS 7, move to `^7`, drop the typescript `ignore` in `.github/dependabot.yml`, and drop this note.
-- Node support follows Vite: Node 20 stays in `engines` and CI until a Vite release drops it, then goes in a major (#117). `vitest` is held at `^4` until then because vitest 5 requires Node ≥22.12.
+- Node support follows Barrel's `vite-plugin-shopify`, since every consumer runs both: `engines.node` matches its minimum, and the `--target node<N>` in `build`/`watch` matches `engines` (`verify-package` checks this). Raising the minimum is a major release. Building this repo needs Node `^22.18 || >=24.11` (tsup 9); consumers only need what `engines` says.
 
 ## Release / branching
 

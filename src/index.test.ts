@@ -151,6 +151,62 @@ describe('shopifyClean plugin', () => {
       expect(existsSync(path.join(assetsDir, 'app-old123.js'))).toBe(true)
     })
 
+    it('deletes the sourcemaps of deleted files', async () => {
+      const manifest: Manifest = {
+        'src/app.ts': { file: 'app-old123.js', src: 'src/app.ts', isEntry: true, css: ['app-old123.css'] },
+      }
+      await fs.writeFile(path.join(manifestDir, 'manifest.json'), JSON.stringify(manifest))
+      for (const file of ['app-old123.js', 'app-old123.js.map', 'app-old123.css', 'app-old123.css.map', 'unrelated.js.map']) {
+        await fs.writeFile(path.join(assetsDir, file), '')
+      }
+
+      const plugin = shopifyClean({ themeRoot: tempDir })
+      await (plugin.buildStart as Function).call(createMockPluginContext(false))
+
+      expect(existsSync(path.join(assetsDir, 'app-old123.js.map'))).toBe(false)
+      expect(existsSync(path.join(assetsDir, 'app-old123.css.map'))).toBe(false)
+      expect(existsSync(path.join(assetsDir, 'unrelated.js.map'))).toBe(true)
+    })
+
+    it('reads the manifest from a custom manifestFileName', async () => {
+      const manifest: Manifest = {
+        'src/app.ts': { file: 'app-old123.js', src: 'src/app.ts', isEntry: true },
+      }
+      await fs.writeFile(path.join(assetsDir, 'custom-manifest.json'), JSON.stringify(manifest))
+      await fs.writeFile(path.join(assetsDir, 'app-old123.js'), 'old js')
+
+      const plugin = shopifyClean({ themeRoot: tempDir, manifestFileName: 'custom-manifest.json' })
+      await (plugin.buildStart as Function).call(createMockPluginContext(false))
+
+      expect(existsSync(path.join(assetsDir, 'app-old123.js'))).toBe(false)
+    })
+
+    it('warns when the assets folder does not exist', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      const plugin = shopifyClean({ themeRoot: path.join(tempDir, 'missing') })
+      await (plugin.buildStart as Function).call(createMockPluginContext(false))
+
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('No assets folder'))
+      warnSpy.mockRestore()
+    })
+
+    it('warns but does not throw when a file cannot be deleted', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const manifest: Manifest = {
+        'src/app.ts': { file: 'app-old123.js', src: 'src/app.ts', isEntry: true },
+      }
+      await fs.writeFile(path.join(manifestDir, 'manifest.json'), JSON.stringify(manifest))
+      // unlink fails on a directory with EISDIR or EPERM, not ENOENT
+      await fs.mkdir(path.join(assetsDir, 'app-old123.js'))
+
+      const plugin = shopifyClean({ themeRoot: tempDir })
+      await expect((plugin.buildStart as Function).call(createMockPluginContext(false))).resolves.toBeUndefined()
+
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to delete asset'))
+      warnSpy.mockRestore()
+    })
+
     it('warns when manifest does not exist', async () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
@@ -172,6 +228,7 @@ describe('shopifyClean plugin', () => {
       await fs.writeFile(path.join(manifestDir, 'manifest.json'), JSON.stringify(initialManifest))
       await fs.writeFile(path.join(assetsDir, 'app-old123.js'), 'old app')
       await fs.writeFile(path.join(assetsDir, 'utils-old456.js'), 'old utils')
+      await fs.writeFile(path.join(assetsDir, 'utils-old456.js.map'), 'old utils map')
 
       const plugin = shopifyClean({ themeRoot: tempDir })
       const ctx = createMockPluginContext(false)
@@ -184,6 +241,7 @@ describe('shopifyClean plugin', () => {
         'src/app.ts': { file: 'app-new789.js', src: 'src/app.ts', isEntry: true },
       }
       await fs.writeFile(path.join(assetsDir, 'app-new789.js'), 'new app')
+      await fs.writeFile(path.join(assetsDir, 'utils-old456.js.map'), 'old utils map')
 
       await (plugin.writeBundle as Function).call(
         ctx,
@@ -194,6 +252,7 @@ describe('shopifyClean plugin', () => {
       // Old files deleted, new file remains
       expect(existsSync(path.join(assetsDir, 'app-old123.js'))).toBe(false)
       expect(existsSync(path.join(assetsDir, 'utils-old456.js'))).toBe(false)
+      expect(existsSync(path.join(assetsDir, 'utils-old456.js.map'))).toBe(false)
       expect(existsSync(path.join(assetsDir, 'app-new789.js'))).toBe(true)
     })
 

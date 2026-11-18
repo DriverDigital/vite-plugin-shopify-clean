@@ -204,11 +204,11 @@ section('Configuration consistency')
 const nodeEngine = pkg.engines?.node
 if (nodeEngine) {
   const minNode = parseInt(nodeEngine.match(/\d+/)?.[0] || '0')
-  // tsup build script uses --target node20
-  if (minNode === 20) {
-    pass('engines.node minimum matches build target (node20)')
+  const buildTarget = parseInt(pkg.scripts?.build?.match(/--target node(\d+)/)?.[1] || '0')
+  if (minNode === buildTarget) {
+    pass(`engines.node minimum matches build target (node${buildTarget})`)
   } else {
-    fail(`engines.node mismatch: ${nodeEngine} vs build target node20`)
+    fail(`engines.node mismatch: ${nodeEngine} vs build target node${buildTarget}`)
   }
 }
 

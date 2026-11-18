@@ -1,21 +1,19 @@
 # Handoff
 
-State of play as of 2026-10-06. Conventions live in `CLAUDE.md`; to-dos are open `todo` issues.
+Current state only. Conventions live in `CLAUDE.md`; to-dos are open `todo` issues.
 
-## Where things are
+## In flight
 
-- **2.0.2 is published** to npm (`latest`) and has a GitHub release. It contains only dev-dependency updates and README fixes.
-- **Nothing is in flight.** `main` is clean, there are no open PRs, and the `develop` branch is gone.
+- **3.0.0 is ready to release once the `node22-security-maintenance` PR merges.** It drops Node 20 (now `>=22.12.0`, matching Barrel's `vite-plugin-shopify` 5), deletes each removed asset's `.map`, and updates dev dependencies (tsup 9, vitest 5). Cut it from `main` with `docs/publish.md`; the CHANGELOG entry is written at release time.
+- That PR supersedes Dependabot #124 and #125; Dependabot closes them once `main` has those versions.
 
 ## Waiting on something outside this repo
 
-- **TypeScript 7 (#103)** waits for @typescript-eslint to support it. As of 2026-10-06, 8.71.1 still declares `typescript <6.1.0`.
-- **Dropping Node 20 (#117)** waits for Vite to drop it. The trigger is a Dependabot PR for a Vite release whose `engines` exclude Node 20, most likely Vite 9. That change ships as 3.0.0 and includes vitest 5.
-- **Node 26 (#109)** is scheduled for Q1 2027 as part of the org-wide sweep. It adds Node 26 only; it doesn't drop Node 20.
+- **TypeScript 7 (#103)** waits for @typescript-eslint to support it. 8.73.0 still declares `typescript <6.1.0`.
+- `.github/dependabot.yml` still ignores vitest majors; the ignore is removed in DriverDigital/workflows#164 and arrives with the next kit wave.
 
-`dependabot.yml` ignores typescript and vitest major versions until #103 and #117 land, so no Dependabot PRs for those majors will appear.
+## Open decisions
 
-## Ready to pick up
-
-- #110: three test gaps in `src/index.test.ts`
-- #114: clean stale sourcemap (`.map`) files. Remove the README caveat when this is done.
+- Repo hardening that needs a closer look: a read-only default workflow token (#126), and npm trusted publishing with provenance (#127).
+- `npm run test:sandbox` doesn't exercise the `.map` cleanup until the sandbox repo turns on sourcemaps and moves to vite-plugin-shopify 5 (DriverDigital/sandbox-vite-plugin-shopify-clean#2).
+- Secret scanning, push protection and CodeQL default setup are on for this repo (free because it's public).

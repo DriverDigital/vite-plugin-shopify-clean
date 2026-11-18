@@ -5,9 +5,14 @@ on:
     - cron: '0 9 1 * *'  # 1st of each month at 9am UTC
   workflow_dispatch:  # Manual trigger for testing
 
+permissions: {}
+
 jobs:
   check-release:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
     steps:
       - name: Get latest vite-plugin-shopify release
         id: upstream
@@ -17,27 +22,32 @@ jobs:
             echo "Failed to fetch latest release"
             exit 1
           fi
-          echo "version=$LATEST" >> $GITHUB_OUTPUT
+          echo "version=$LATEST" >> "$GITHUB_OUTPUT"
 
+      # The tag name comes from another repo, so it reaches the shell through env, never inline.
       - name: Check if issue already exists
         id: check
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ steps.upstream.outputs.version }}
         run: |
-          EXISTING=$(gh issue list --state all --search "vite-plugin-shopify ${{ steps.upstream.outputs.version }} in:title" --json number --jq 'length')
-          echo "exists=$EXISTING" >> $GITHUB_OUTPUT
+          EXISTING=$(gh issue list --state all --search "vite-plugin-shopify $VERSION in:title" --json number --jq 'length')
+          echo "exists=$EXISTING" >> "$GITHUB_OUTPUT"
 
       - name: Create issue for new release
         if: steps.check.outputs.exists == '0'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ steps.upstream.outputs.version }}
         run: |
           gh issue create \
-            --title "Upstream release: vite-plugin-shopify ${{ steps.upstream.outputs.version }}" \
+            --title "Upstream release: vite-plugin-shopify $VERSION" \
             --body "A new version of [vite-plugin-shopify](https://github.com/barrel/shopify-vite) has been released.
 
-          **Version:** ${{ steps.upstream.outputs.version }}
-          **Release:** https://github.com/barrel/shopify-vite/releases/tag/${{ steps.upstream.outputs.version }}
+          **Version:** $VERSION
+          **Release:** https://github.com/barrel/shopify-vite/releases/tag/$VERSION
 
           ### Checklist
           - [ ] Review release notes for breaking changes

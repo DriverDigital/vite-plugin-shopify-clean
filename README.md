@@ -16,7 +16,7 @@ Why you might need this: when Vite emits hashed filenames (e.g., `app-abc123.js`
 
 - Cleans pre-existing assets listed in the last manifest at the start of a build.
 - Removes stale assets after each build by comparing the previous manifest to the current one — in both dev (watch) and production builds.
-- Tracks JS, CSS, and asset files (images, fonts, etc.) from the manifest. Sourcemap (`.map`) files aren't in the manifest, so they aren't cleaned.
+- Tracks JS, CSS, and asset files (images, fonts, etc.) from the manifest, and removes each deleted file's sourcemap (`.map`) with it.
 - Uses Rollup/Vite `watchMode` (no env var required) to control watch-specific behavior.
 - Works with the Shopify theme assets directory structure.
 - Minimal configuration; sensible defaults.
@@ -29,7 +29,7 @@ npm i -D @driver-digital/vite-plugin-shopify-clean
 
 Peer requirements:
 
-- Node.js: `^20.19.0 || >=22.12.0`
+- Node.js: `>=22.12.0`
 - Vite: `>=6`
 
 ## Usage
@@ -92,7 +92,7 @@ Defaults used by the plugin:
 
 ## How it works
 
-The plugin tracks files listed in Vite's manifest (JS, CSS, and asset files like images and fonts) and uses manifest comparison to determine what to clean.
+The plugin tracks files listed in Vite's manifest (JS, CSS, and asset files like images and fonts) and uses manifest comparison to determine what to clean. Whenever it deletes a file, it also deletes that file's sourcemap (`<file>.map`), which Vite doesn't list in the manifest.
 
 - Build start (`buildStart`)
   - If `assets/.vite/manifest.json` exists (or your configured path), the plugin reads the previously emitted assets and removes them from `assets/` before a fresh build. This prevents stale files from lingering across builds.

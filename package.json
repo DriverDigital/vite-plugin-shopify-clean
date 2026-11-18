@@ -15,7 +15,7 @@
   "author": "Driver Digital",
   "license": "MIT",
   "engines": {
-    "node": "^20.19.0 || >=22.12.0"
+    "node": ">=22.12.0"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -32,8 +32,8 @@
   },
   "scripts": {
     "dev": "npm run build -- --watch",
-    "build": "tsup src/index.ts --dts --format cjs,esm --target node20 --clean",
-    "watch": "tsup src/index.ts --dts --format cjs,esm --target node20 --clean --watch",
+    "build": "tsup src/index.ts --dts --format cjs,esm --target node22 --clean",
+    "watch": "tsup src/index.ts --dts --format cjs,esm --target node22 --clean --watch",
     "lint": "eslint src --ext .ts,.js --fix",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -45,13 +45,13 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@types/node": "^26.0.1",
-    "@typescript-eslint/eslint-plugin": "^8.56.1",
-    "@typescript-eslint/parser": "^8.56.1",
-    "eslint": "^10.0.2",
-    "tsup": "^8.5.1",
+    "@types/node": "^26.6.6",
+    "@typescript-eslint/eslint-plugin": "^8.73.0",
+    "@typescript-eslint/parser": "^8.73.0",
+    "eslint": "^10.15.0",
+    "tsup": "^9.0.0",
     "typescript": "~6.0.3",
-    "vite": "^8.0.8",
-    "vitest": "^4.0.18"
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0"
   }
 }
