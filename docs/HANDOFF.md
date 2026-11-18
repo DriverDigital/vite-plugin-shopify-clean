@@ -2,9 +2,20 @@
 
 Current state only. Conventions live in `CLAUDE.md`; to-dos are open `todo` issues.
 
-## In flight
+## Next: release 3.0.0
 
-- **3.0.0 is ready to release from `main`.** It drops Node 20 (now `>=22.12.0`, matching Barrel's `vite-plugin-shopify` 5), deletes each removed asset's `.map`, and updates dev dependencies (tsup 9, vitest 5). Cut it with `docs/publish.md`; the CHANGELOG entry is written at release time. Run `test:sandbox` after the sandbox repo's `vite8-sourcemaps` PR merges, since that is what covers the `.map` cleanup.
+Everything for 3.0.0 is merged to `main`. The next session releases it:
+
+1. Pull `main` here and in the sibling `sandbox-vite-plugin-shopify-clean` checkout, then run `npm ci` in both.
+2. Run `npm run test:sandbox`. It fails on its own if any stale `-OLD` file, `.map` files included, survives the build.
+3. Follow `docs/publish.md` from step 2 (`verify-package`) through the GitHub release. The user runs `npm publish`.
+
+What 3.0.0 contains, for the CHANGELOG:
+- **Breaking:** requires Node `>=22.12.0` (Node 20 dropped), matching Barrel's `vite-plugin-shopify` 5.
+- Each deleted asset's sourcemap (`<file>.map`) is now deleted with it.
+- Dev dependencies updated (tsup 9, vitest 5, typescript-eslint 8.73); clears the minimatch alert.
+- `watch-upstream.yml` works again, and the workflows declare least-privilege permissions.
+- `npm audit` still reports picomatch (dev-only, no patched release yet); `npm audit --omit=dev` is clean, so don't call the audit clean.
 
 ## Waiting on something outside this repo
 
@@ -15,3 +26,4 @@ Current state only. Conventions live in `CLAUDE.md`; to-dos are open `todo` issu
 
 - Repo hardening that needs a closer look: a read-only default workflow token (#126), and npm trusted publishing with provenance (#127).
 - Secret scanning, push protection and CodeQL default setup are on for this repo (free because it's public).
+- Two stale remote branches could be deleted: `remove-pipeline-kit-files` (#122 merged) and `dependabot/npm_and_yarn/other-dependencies-77dc0460b0`.
