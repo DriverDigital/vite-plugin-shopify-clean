@@ -12,7 +12,8 @@ TARBALL=$(npm pack | tail -1)
 echo ""
 echo "=== Installing in sandbox ==="
 cd "$SANDBOX_DIR"
-npm install "$PLUGIN_DIR/$TARBALL"
+# --no-save keeps the sandbox's package.json and lockfile untouched
+npm install --no-save "$PLUGIN_DIR/$TARBALL"
 
 echo ""
 echo "=== Enabling plugin in vite.config.js ==="
@@ -40,6 +41,13 @@ echo ""
 echo "=== Restoring vite.config.js ==="
 sed -i '' "s|^import shopifyClean|// import shopifyClean|" vite.config.js
 sed -i '' "s|^    shopifyClean()|    // shopifyClean()|" vite.config.js
+
+if ls -A "$ASSETS_DIR" | grep -q -- '-OLD'; then
+  echo ""
+  echo "FAIL: stale -OLD files are still in assets/"
+  cd "$PLUGIN_DIR" && rm -f driver-digital-vite-plugin-shopify-clean-*.tgz
+  exit 1
+fi
 
 echo ""
 echo "Build test complete!"
