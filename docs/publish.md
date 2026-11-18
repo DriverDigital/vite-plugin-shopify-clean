@@ -27,14 +27,15 @@ npm run test:sandbox
 
 This script will:
 1. Build and pack the plugin (cleans up old tarballs first)
-2. Install it in the sandbox repo
+2. Install it in the sandbox repo with `--no-save`, so the sandbox's `package.json` stays unchanged
 3. Enable the plugin in vite.config.js
-4. Clean assets and create fake stale files
+4. Clean assets and create fake stale files, including stale `.map` sourcemaps
 5. Show assets **before** build (should include `-OLD` stale files)
 6. Run `vite build`
 7. Show assets **after** build (stale files should be removed)
 8. Restore vite.config.js to its original state
-9. Return to the plugin directory
+9. Fail if any `-OLD` file is left in `assets/`
+10. Return to the plugin directory
 
 **Verify:**
 - The "before" list includes stale `-OLD` files

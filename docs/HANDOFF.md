@@ -4,8 +4,7 @@ Current state only. Conventions live in `CLAUDE.md`; to-dos are open `todo` issu
 
 ## In flight
 
-- **3.0.0 is ready to release once the `node22-security-maintenance` PR merges.** It drops Node 20 (now `>=22.12.0`, matching Barrel's `vite-plugin-shopify` 5), deletes each removed asset's `.map`, and updates dev dependencies (tsup 9, vitest 5). Cut it from `main` with `docs/publish.md`; the CHANGELOG entry is written at release time.
-- That PR supersedes Dependabot #124 and #125; Dependabot closes them once `main` has those versions.
+- **3.0.0 is ready to release from `main`.** It drops Node 20 (now `>=22.12.0`, matching Barrel's `vite-plugin-shopify` 5), deletes each removed asset's `.map`, and updates dev dependencies (tsup 9, vitest 5). Cut it with `docs/publish.md`; the CHANGELOG entry is written at release time. Run `test:sandbox` after the sandbox repo's `vite8-sourcemaps` PR merges, since that is what covers the `.map` cleanup.
 
 ## Waiting on something outside this repo
 
@@ -15,5 +14,4 @@ Current state only. Conventions live in `CLAUDE.md`; to-dos are open `todo` issu
 ## Open decisions
 
 - Repo hardening that needs a closer look: a read-only default workflow token (#126), and npm trusted publishing with provenance (#127).
-- `npm run test:sandbox` doesn't exercise the `.map` cleanup until the sandbox repo turns on sourcemaps and moves to vite-plugin-shopify 5 (DriverDigital/sandbox-vite-plugin-shopify-clean#2).
 - Secret scanning, push protection and CodeQL default setup are on for this repo (free because it's public).
