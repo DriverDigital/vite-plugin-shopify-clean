@@ -1,4 +1,6 @@
-# .github/dependabot.yml for vite-plugin-shopify-clean: the npm variant plus its own major ignores.
+# .github/dependabot.yml for vite-plugin-shopify-clean: the npm variant plus its own major ignores,
+# and `assignees`, which the other variants leave to the Dependabot report. This repo is public, so
+# it has no report to assign anyone.
 # The fleet wave installs it on every kit branch and keeps it current (tools/kit-platforms.sh picks
 # the variant); edit it in DriverDigital/workflows (templates/github/dependabot/), never in place.
 #

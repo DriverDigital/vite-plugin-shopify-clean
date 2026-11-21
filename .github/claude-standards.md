@@ -55,8 +55,9 @@ file from the PR head, so anything load-bearing belongs in `CLAUDE.md` or `.clau
   owns it, such as `CLAUDE.md` or `README.md`.
 - **Docs ship with the change** — A pull request carries every doc update its change makes
   necessary, in the same PR, never in a later pass. Do this without being asked. Before opening a PR,
-  pushing to one, merging or wrapping up, search the repo's docs for what the change touched and
-  update, in place, each one the change made untrue: `CLAUDE.md` when a convention or invariant
+  pushing to one, merging or wrapping up, read `README.md`, `CLAUDE.md` and `docs/HANDOFF.md` in
+  full, search the rest of the repo's docs for what the change touched, and update, in place, each
+  one the change made untrue: `CLAUDE.md` when a convention or invariant
   moved, a README, `docs/HANDOFF.md`, or any other doc. Delete a statement that stopped being true;
   never append a correction beneath it. Leave old reference docs in `docs/` as they are unless the
   change makes them misleading for current work. A doc in another repo gets a `todo` issue there
