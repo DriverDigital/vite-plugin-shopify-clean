@@ -62,13 +62,16 @@ file from the PR head, so anything load-bearing belongs in `CLAUDE.md` or `.clau
   never append a correction beneath it. Leave old reference docs in `docs/` as they are unless the
   change makes them misleading for current work. A doc in another repo gets a `todo` issue there
   instead of an edit.
-- **Branches and pull requests** — Macroscope reviews a pull request at most three times, every
-  push to a published PR spends one, and it does not review drafts. A session works on one feature
+- **Branches and pull requests** — Macroscope reviews a pull request automatically at most three
+  times, every push to a published PR spends one, and it does not review drafts. A session works on one feature
   branch, commits each piece of work separately (even when they touch unrelated things) and pushes
   to the branch as often as it likes, then opens one PR at the end as a draft (`gh pr create
   --draft`). It never marks the PR ready for review: the person running the session publishes it, or
   says to, once they have reviewed it. Once a PR is published, collect fixes locally and push them
-  together. One exception, for an org admin, who can bypass branch protection: a minor docs-only
+  together. When the three reviews are spent, convert the PR to draft and mark it ready again (`gh pr
+  ready <n> --undo`, then `gh pr ready <n>`): marking it ready starts a new review. A PR comment
+  `@macroscope-app review this PR` also works. Never close and reopen a PR for this: the count
+  survives it, and closing deletes the preview theme and any theme-editor changes on it. One exception, for an org admin, who can bypass branch protection: a minor docs-only
   change may go straight to `main` when no feature branch is open, or when it concerns `main` and not
   the branch's work; anyone else opens a PR for it. When the session's work is on a
   feature branch, its docs updates, the end-of-session `docs/HANDOFF.md` included, are committed to
@@ -91,6 +94,14 @@ file from the PR head, so anything load-bearing belongs in `CLAUDE.md` or `.clau
   file differs from the last pushed commit and the branch has not changed it since, take the preview's
   version and commit it ("Pull theme editor changes"). Where both changed, stop and ask. Skip this
   when the CLI has no access to the store, and say so.
+- **Page builder files** — Page builder apps write their own files into a Shopify theme, and a live
+  theme pull brings them into the repo: EComposer's `ecom-*` and `ecom_*` files, `layout/ecom.liquid`
+  and `templates/*.ecom*`, and PageFly's `pf-*` and `pagefly*` files, `layout/theme.pagefly.liquid`
+  and `templates/*.pf-*`. Never edit one by hand: the app rewrites it when the merchant
+  publishes, so keep the live theme's copy and make changes in the app. Never give a file of ours a
+  name that matches one of these, in any repo: Macroscope skips them fleet-wide, so the file would
+  go unreviewed. Do not review them, and a theme repo that carries them lists them under `ignore:`
+  in its `.theme-check.yml`, since they fail theme check with errors only the app can fix.
 - **Figma designs on a PR** — When a PR implements a Figma design, put the design link in its
   description and add the `figma` label (`gh pr create --label figma`, or `gh pr edit <n> --add-label
   figma`): Macroscope runs its design fidelity check only on PRs with that label. If you cannot add
